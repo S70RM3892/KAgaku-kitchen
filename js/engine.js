@@ -4,6 +4,7 @@ import {RXBY,CELLS,CELLCOL,SHELF_IDS,CATS,MENU,MCOST,TG,stepsOf,routeReagents,se
   fmt,fOf,nameOf,STAGES,REVIEW,poolFor,cellLabel} from './chem.js';
 import * as A from './atoms.js';
 import * as O from './org.js';
+import * as I from './ion.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
 export const ROT_SEC=40;      // 協力：棚替えの間隔
 export const REQ_LIFE=15;     // 協力：リクエストの寿命
@@ -12,13 +13,17 @@ export const STAMPS=['まかせて！','手伝って！','ナイス！','ごめ�
 export const FX_NAME=['','煙幕','在庫切れ','引火','大惨事'];
 export const fxName=p=>FX_NAME[Math.min(4,Math.max(1,p))];
 
-/* ---------- ルールセット：反応式モード(rx)／組成モード(atom)／官能基モード(org) ---------- */
+/* ---------- ルールセット：反応式モード(rx)／組成モード(atom)／官能基モード(org)／無機イオンモード(ion) ---------- */
 // 協力・対戦・通信の仕組みは共通で、棚・判定・得点だけをモードごとに切り替える
 // 組成モードの棚は本物の周期表（18族）。協力の担当は族ごと（2人なら奇数族と偶数族）
 const AEL={};A.PT.forEach(e=>{AEL[e.s]=e.g-1;});
 // 官能基モードの棚：骨格（左）・官能基（右）・検出試薬（最下段）。協力の担当は2人なら「骨格」と「官能基」に分かれる
 const OCELLS=[...O.SK,...O.FG,...O.TIDS.map(t=>'@'+t)],OCOL={};
 O.SK.forEach((k,i)=>OCOL[k]=(i%2)*2);O.FG.forEach((k,i)=>OCOL[k]=1+(i%2)*2);O.TIDS.forEach((t,i)=>OCOL['@'+t]=i%4);
+// 無機イオンモードの棚：陽イオン（左）・陰イオン（右）・配位子と半反応式の部品（左の最下段）。2人なら陽イオン担当と陰イオン担当
+const ICELLS=[...I.CATS,...I.SPS,...I.ANS],ICOL={};
+I.CATS.forEach((k,i)=>ICOL[k]=(i%2)*2);I.ANS.forEach((k,i)=>ICOL[k]=1+(i%2)*2);I.SPS.forEach((k,i)=>ICOL[k]=i%4);
+const hsum=k=>Object.values(I.HALF[k].need).reduce((a,b)=>a+b,0);
 const has=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);
 export const costOf=k=>MCOST[k]||3;
 export function orderLife(k,mode){
@@ -67,11 +72,31 @@ export const RULES={
       if(O.isPair(o.k)){p.res={pair:O.judgePair(o.k,p.cat)};p.dur=0.8;}
       else{p.res={build:O.judgeBuild(o.k,p.items)};p.dur=0.5+0.12*p.items.reduce((a,x)=>a+x[1],0);}
     },
-    finish:(S,o,key,p)=>finishOrg(S,o,key,p),
+    finish:(S,o,key,p)=>finishParts(S,o,key,p,O),
     tail:(k,note)=>O.isPair(k)?`<small>${note||'正解：'+O.answerText(k)}</small>`:null,
   },
+  ion:{
+    stages:I.STAGES,review:I.REVIEW,cells:ICELLS,col:ICOL,
+    pool:st=>st.pool==='review'?I.ALL.slice():st.pool.slice(),
+    valid:k=>typeof k==='string'&&has(I.PART,k),
+    known:I.known,tgt:I.tgt,
+    nclue:k=>I.isHalf(k)?1:I.BYID[k].p.length,
+    base:k=>I.isHalf(k)?8+2*I.HALF[k].lv+Math.min(8,hsum(k)>>1):6+Math.min(12,2*I.BYID[k].np)+2*(I.BYID[k].lv-1),
+    life:(k,m)=>I.isHalf(k)?Math.min(70,32+2*hsum(k)):Math.min(70,Math.max(30,24+3*I.BYID[k].np+(m==='prop'?10:0))),
+    power:k=>I.isHalf(k)?Math.floor(hsum(k)/8):Math.floor((I.BYID[k].np+I.BYID[k].lv)/5),
+    lockPool:k=>I.isHalf(k)?[]:Object.keys(I.BYID[k].parts),lockSkip:['H','e','H2O'],lockFill:()=>I.PARTS.map(p=>p.id),
+    maxCoef:14,maxSpecies:6,label:I.label,dark:'停電！ 棚の位置でイオンを探せ',rot:'担当のイオンが入れ替わった',
+    accept:(o,k)=>I.accept(o.k,k),
+    would:(S,o,p)=>I.exact(o.k,p.items),
+    start:(S,o,p)=>{
+      p.res=I.isHalf(o.k)?{half:I.judgeHalf(o.k,p.items)}:{build:I.judgeBuild(o.k,p.items)};
+      p.dur=Math.min(1.4,0.5+0.05*p.items.reduce((a,x)=>a+x[1],0));
+    },
+    finish:(S,o,key,p)=>finishParts(S,o,key,p,I),
+    tail:(k,note)=>I.isHalf(k)?`<small>${note||'正解：'+I.answerText(k)}</small>`:`<small>${I.disp(k)} ${I.BYID[k].n}</small>`,
+  },
 };
-export const GAMES={rx:'反応式モード',atom:'組成モード',org:'官能基モード'};
+export const GAMES={rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード'};
 // 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
 export const BUSY=[null,
   {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},
@@ -295,8 +320,9 @@ function finishPot(S,o,key,p){
   const why=it.via&&x.main===it.t?`製法が違う（${it.proc}で作る）`:`正解：${T.n} = ${fmt(T.f)}`;
   mistake(S,o,key,p,x.main,fOf(x.main),why,x.id);
 }
-// 官能基モード：組み立て（部品がそろえば提供・別の化合物なら −5・存在しない組み合わせは失敗）／見分け（試薬で結果が分かれれば提供）
-function finishOrg(S,o,key,p){
+// 部品で組むモード（官能基・無機イオン）：組み立て（そろえば提供・別の物質なら −5・存在しない組み合わせは失敗）／
+// 見分け（試薬で結果が分かれれば提供）／半反応式（e⁻・H⁺・H₂O の数が合えば提供）
+function finishParts(S,o,key,p,M){
   const r=p.res||{},T=RU(S).tgt(o.k);
   if(r.pair){
     const j=r.pair,t=O.TEST[p.cat];
@@ -305,10 +331,15 @@ function finishOrg(S,o,key,p){
       small:`${j.line}｜正解例：${O.answerText(o.k)}`,logWhy:'見分け失敗'});
     return;
   }
-  const j=r.build||{};
-  if(j.ok){autoServe(S,o,key,p,[],null);return;}
-  if(j.wrong){mistake(S,o,key,p,j.wrong.n,j.wrong.f,`正解：${T.n} = ${fmt(T.f)}`);return;}
-  const why=j.lv<=S.fb?j.why:(S.fb>=1&&j.generic?j.generic:'その組み合わせの化合物は無い');
+  const j=r.build||r.half||{};
+  if(j.ok){autoServe(S,o,key,p,[],null,r.half?M.answerText(o.k):null);return;}
+  if(j.wrong){
+    if(M.disp)mistake(S,o,key,p,j.wrong.n,j.wrong.f,'',null,{small:`${M.disp(j.wrong.id)}｜正解：${T.n} = ${M.disp(o.k)}`});
+    else mistake(S,o,key,p,j.wrong.n,j.wrong.f,`正解：${T.n} = ${fmt(T.f)}`);
+    return;
+  }
+  const none=r.half?'係数が合わない':(M.NONE||'その組み合わせの化合物は無い');
+  const why=j.lv<=S.fb?j.why:(S.fb>=1&&j.generic?j.generic:none);
   p.state='fail';p.fail={why};
   emitPot(S,key,{h:`組めない<small>${why}</small>`,k:'ng',s:'fail'});
 }

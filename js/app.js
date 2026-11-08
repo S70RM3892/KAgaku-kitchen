@@ -2,6 +2,7 @@
 import {SUB,RXBY,MENU,MKEYS,TG,CATNAME,SHELF,CATS,HEAT,route,eqHTML,condText,nameOf,fOf,cellLabel,cellName,stepsOf,fmt} from './chem.js';
 import * as A from './atoms.js';
 import * as O from './org.js';
+import * as I from './ion.js';
 import * as E from './engine.js';
 import {HostNet,ClientNet,PROTO,normCode} from './net.js';
 const {COLORS,STAMPS}=E;
@@ -10,7 +11,7 @@ const {COLORS,STAMPS}=E;
 // モードごとに習熟度・ベストを分けて持つ。rx=反応式モード、atom=組成モード（旧版 v1 の記録を引き継ぐ）、org=官能基モード
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
-let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -23,7 +24,7 @@ try{
     if(o.vs&&!(SAVE.vs.win+SAVE.vs.lose+SAVE.vs.draw))SAVE.vs=o.vs;
   }
 }catch(e){}
-const GS=['rx','atom','org'];
+const GS=['rx','atom','org','ion'];
 for(const g of GS){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
 if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(!GS.includes(SAVE.g))SAVE.g='rx';
@@ -36,9 +37,25 @@ function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catc
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
 const GK=g=>GS.includes(g)?g:'rx';
 const SV=g=>SAVE[GK(g)];
-const knownKey=(g,k)=>g==='atom'?!!A.BYID[k]:g==='org'?O.known(k):!!MENU[k];
+const knownKey=(g,k)=>g==='atom'?!!A.BYID[k]:g==='org'?O.known(k):g==='ion'?I.known(k):!!MENU[k];
 // モードごとの呼び名
-const UNIT={rx:'反応',atom:'物質',org:'化合物'};
+const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質'};
+// 部品で組むモード（官能基・無機イオン）の画面まわり：棚の並び・伝票の種類・ヒント・表示
+const PM={
+  org:{M:O,unit:'部品',cap:'骨格・官能基：タップで選んだ客の鍋へ',stackCols:6,
+    shelf:{L:{main:O.SK,cap2:'検出試薬',bottom:O.TIDS.slice(0,4).map(t=>'@'+t)},R:{main:O.FG,cap2:'（見分けの注文で1つ選ぶ）',bottom:O.TIDS.slice(4).map(t=>'@'+t)}},
+    cls:k=>k[0]==='@'?'r-cat':'o-'+OCLS[k],
+    kind:k=>O.isPair(k)?'pair':'build',
+    hint:(k,l,m)=>l===2&&!O.isPair(k)?O.hint(k,l,m):esc(O.hint(k,l,m)),
+    disp:k=>O.isPair(k)?'見分け':fmt(O.BYID[k].f)},
+  ion:{M:I,unit:'イオン',cap:I.SHELF.L.cap,stackCols:7,
+    shelf:{L:I.SHELF.L,R:I.SHELF.R},
+    cls:k=>I.cls(k),
+    kind:k=>I.isHalf(k)?'half':'build',
+    hint:(k,l,m)=>I.hintHTML(k,l,m),
+    disp:k=>I.disp(k)},
+};
+const isParts=g=>Object.prototype.hasOwnProperty.call(PM,g);
 const curG=()=>{const V=view();return V&&V.g?V.g:SAVE.g;};
 function mst(id,g=curG()){const M=SV(g).mastery;return M[id]||(M[id]={box:0,seen:0,ok:0,ng:0});}
 function applyMastery(m,g=curG()){
@@ -54,13 +71,13 @@ function applyMastery(m,g=curG()){
   persistSoon();
 }
 function myWeights(g){const w={},M=SV(g).mastery;for(const id in M){const m=M[id];if(m&&m.seen&&knownKey(g,id))w[id]=m.box|0;}return w;}
-const allWeights=()=>({rx:myWeights('rx'),atom:myWeights('atom'),org:myWeights('org')});
+const allWeights=()=>({rx:myWeights('rx'),atom:myWeights('atom'),org:myWeights('org'),ion:myWeights('ion')});
 function cleanW(w,g){
   const o={};if(!w||typeof w!=='object')return o;
   for(const id in w)if(knownKey(g,id)&&typeof w[id]==='number')o[id]=Math.max(0,Math.min(5,w[id]|0));
   return o;
 }
-const cleanWeights=w=>({rx:cleanW(w&&w.rx,'rx'),atom:cleanW(w&&w.atom,'atom'),org:cleanW(w&&w.org,'org')});
+const cleanWeights=w=>({rx:cleanW(w&&w.rx,'rx'),atom:cleanW(w&&w.atom,'atom'),org:cleanW(w&&w.org,'org'),ion:cleanW(w&&w.ion,'ion')});
 const cleanName=s=>String(s||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,10)||'ケミスト';
 const myName=()=>cleanName(SAVE.name);
 function reviewPool(g){const M=SV(g).mastery;return Object.keys(M).filter(k=>{const m=M[k];return knownKey(g,k)&&m&&m.seen&&(m.box<=2||m.ng>m.ok);});}
@@ -145,7 +162,7 @@ function bgmStop(){BGM.on=false;clearInterval(BGM.timer);}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // 通信で届いたトースト文面は、<small><sub><b> 以外のタグを無効化してから表示する
-const safe=h=>esc(h).replace(/&lt;(\/?(?:small|sub|b))&gt;/g,'<$1>');
+const safe=h=>esc(h).replace(/&lt;(\/?(?:small|sub|sup|b))&gt;/g,'<$1>');
 let CUR='title';
 function show(id){CUR=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));document.body.classList.toggle('in-game',id==='game');if(id!=='game')closeStamps();}
 let OVK='';
@@ -167,7 +184,7 @@ function starsFor(st,score){if(!st.stars)return 0;return st.stars.filter(t=>scor
 const busyKey=(id,b)=>(b|0)===2||!b?id:`${id}@${b}`;
 const scaledStars=(st,b)=>st.stars?st.stars.map(x=>Math.round(x*E.busyOf(b).star/10)*10):null;
 function unlocked(i,g=SAVE.g){
-  if(i===0||g==='org')return true;const p=stagesOf(g)[i-1];
+  if(i===0||isParts(g))return true;const p=stagesOf(g)[i-1];
   for(let b=1;b<=5;b++)if(starsFor({stars:scaledStars(p,b)},SV(g).best[busyKey(p.id,b)]||0)>=1)return true;
   return false;
 }
@@ -184,7 +201,10 @@ const HOWTO={
       <b>判定は分子式（組成式）</b>：C₂H₆O ならエタノールでもジメチルエーテルでも同じ扱い。`,
   org:`<b>官能基モード</b>：骨格（CH₃–・C₆H₅–・o-C₆H₄ など）と官能基（–OH・–CHO・–COOH など）の<b>部品を組んで有機化合物を作る</b>。「見分け」の注文では、2つの化合物を区別できる<b>検出試薬</b>（銀鏡・ヨードホルム・FeCl₃・NaHCO₃・さらし粉など）を1つ選ぶ。<br>
       <b>段階を選べる</b>：基礎（官能基入門）→基礎＋（検出反応）→標準（芳香族）→応用（異性体・ひっかけ）→京大（全範囲・性質のみ）。最初から全部選べる。<br>
-      <b>覚え方の仕組み</b>：間違えると「何ができたか」「各試薬で何が起きるか」がその場で出て、次からよく注文される。教科書や文献で扱いが割れる反応（ギ酸とフェーリング液など）は正解に使わない。`
+      <b>覚え方の仕組み</b>：間違えると「何ができたか」「各試薬で何が起きるか」がその場で出て、次からよく注文される。教科書や文献で扱いが割れる反応（ギ酸とフェーリング液など）は正解に使わない。`,
+  ion:`<b>無機イオンモード</b>：<b>陽イオンと陰イオンを電荷がつり合うように組んで</b>、酸・塩基・塩・酸化物・沈殿・酸化剤／還元剤を作る（例：Al₂(SO₄)₃＝Al³⁺×2＋SO₄²⁻×3）。中心の金属イオンと配位子で<b>錯イオン</b>も組む。<br>
+      <b>半反応式の注文</b>：MnO₄⁻ → Mn²⁺（硫酸酸性）のように変化が示されるので、<b>e⁻・H⁺・H₂O（・OH⁻）の数</b>を合わせる。酸化還元滴定の計算の土台。<br>
+      <b>段階を選べる</b>：基礎（イオンの組み立て）→基礎＋（酸・塩基・塩）→標準（酸化還元）→応用（沈殿と錯イオン）→京大（全範囲）。最初から全部選べる。`
 };
 function renderTitle(){
   const g=SAVE.g,R=SV(g),ST=stagesOf(g),RV=reviewOf(g);
@@ -231,6 +251,7 @@ $('btnJoin').addEventListener('click',()=>{audio();joinDialog('');});
 function tutorial(fromGame,g=SAVE.g){
   if(g==='atom'){tutorialA(fromGame);return;}
   if(g==='org'){tutorialO(fromGame);return;}
+  if(g==='ion'){tutorialI(fromGame);return;}
   overlay(`<h2>遊び方（反応式モード）</h2><div class="tut">
     <div class="step"><span class="n">1</span><div>画面は<b>左右の端に試薬棚</b>、<b>中央に客（伝票）の列</b>。客ごとに専用の鍋があり、中身はいつでも伝票に見える。<b>伝票をタップして選ぶ</b>と、棚の上に「入れ先」が出る。</div></div>
     <div class="step"><span class="n">2</span><div><b>試薬棚</b>をタップして鍋へ。同じ試薬をもう一度で<b>係数+1</b>（濃・希に注意）。必要なら<b>触媒</b>（棚の最下段）、<b>🔥ボタン</b>で 常温→加熱→高温・高圧。</div></div>
@@ -263,11 +284,23 @@ function tutorialO(fromGame){
   </div><button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開店する':'わかった'}</button>`);
 }
 
+function tutorialI(fromGame){
+  overlay(`<h2>遊び方（無機イオンモード）</h2><div class="tut">
+    <div class="step"><span class="n">1</span><div>棚は<b>左に陽イオン</b>（H⁺・Na⁺・NH₄⁺・Ca²⁺・Fe³⁺・Al³⁺ など）、<b>右に陰イオン</b>（OH⁻・Cl⁻・SO₄²⁻・CO₃²⁻・PO₄³⁻・CH₃COO⁻ など、最下段は酸化剤のイオン）、<b>左の最下段</b>に配位子（NH₃・CN⁻）と半反応式の部品（H₂O・e⁻）。<b>伝票をタップして選ぶ</b>。</div></div>
+    <div class="step"><span class="n">2</span><div><b>物質の注文</b>：電荷がつり合うようにイオンを入れる。例：CaCl₂＝Ca²⁺＋Cl⁻×2、Fe₂(SO₄)₃＝Fe³⁺×2＋SO₄²⁻×3、硫酸＝H⁺×2＋SO₄²⁻。酸性塩は NaHSO₄＝Na⁺＋HSO₄⁻（Na⁺＋H⁺＋SO₄²⁻ でもよい）。</div></div>
+    <div class="step"><span class="n">3</span><div><b>錯イオン</b>：中心の金属イオン＋配位子を配位数ぶん。例：[Cu(NH₃)₄]²⁺＝Cu²⁺＋NH₃×4、[Fe(CN)₆]⁴⁻＝Fe²⁺＋CN⁻×6。</div></div>
+    <div class="step"><span class="n">4</span><div><b>半反応式</b>（例：MnO₄⁻ → Mn²⁺、硫酸酸性）：<b>e⁻・H⁺・H₂O の数</b>を入れる（MnO₄⁻ なら e⁻×5・H⁺×8・H₂O×4）。電子の数は酸化数の変化から、O原子はH₂O、H原子はH⁺で合わせる。</div></div>
+    <div class="step"><span class="n">5</span><div>そろえば<b>自動で提供</b>。別の物質になったら−5で何ができたかが出る。電荷がつり合わない・電子の数が違うなどは失敗で、段階が低いほど理由が詳しい。</div></div>
+    <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は2人なら<b>陽イオン担当と陰イオン担当</b>に分かれ、1つの鍋に合わせて組む。対戦は早い者勝ち。</div></div>
+  </div><button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開店する':'わかった'}</button>`);
+}
+
 /* ================= 図鑑 ================= */
 function renderDex(){
   $('dexTitle').textContent=UNIT[GK(SAVE.g)]+'図鑑';
   if(SAVE.g==='atom'){renderDexA();return;}
   if(SAVE.g==='org'){renderDexO();return;}
+  if(SAVE.g==='ion'){renderDexI();return;}
   let h='',seen=0,master=0;
   ['lab','ppt','ind','org'].forEach(c=>{
     const items=MKEYS.filter(k=>MENU[k].c===c);
@@ -329,6 +362,29 @@ function renderDexO(){
   $('dexList').innerHTML=h;
   $('dexSum').textContent=`出会った化合物・見分け ${seen} / ${O.DB.length+O.PAIRS.length}　習得（★5） ${master}　対戦成績 ${SAVE.vs.win}勝${SAVE.vs.lose}敗${SAVE.vs.draw?SAVE.vs.draw+'分':''}`;
 }
+// 無機イオンモードの図鑑：レベル別の物質と、半反応式
+const LVNAME_I=['','基礎（イオンの組み立て）','基礎＋（酸・塩基・塩）','標準（酸化剤・還元剤）','応用（沈殿・錯イオン）'];
+function renderDexI(){
+  let h='',seen=0,master=0;
+  const cell=(k,top,sub)=>{const m=SAVE.ion.mastery[k];if(m&&m.seen){seen++;if(m.box>=5)master++;
+    return `<button class="dx" data-dxi="${esc(k)}"><div class="f">${top}</div>${sub}<div class="s">${stars3(m.box)}</div></button>`;}
+    return `<div class="dx unseen"><div class="f">？？？</div>未注文</div>`;};
+  for(let lv=1;lv<=4;lv++){
+    h+=`<div class="dex-sec"><h4>${LVNAME_I[lv]}</h4><div class="dex-grid">`+I.DB.filter(d=>d.lv===lv).map(d=>cell(d.id,I.disp(d.id),esc(d.n))).join('')+'</div></div>';
+  }
+  h+=`<div class="dex-sec"><h4>半反応式（酸化剤・還元剤）</h4><div class="dex-grid">`+I.HALVES.map(x=>cell(x.id,`<span style="font-size:12px">${esc(x.core)}</span>`,esc(x.role)+(x.cond?'・'+esc(x.cond):''))).join('')+'</div></div>';
+  $('dexList').innerHTML=h;
+  $('dexSum').textContent=`出会った物質・半反応式 ${seen} / ${I.DB.length+I.HALVES.length}　習得（★5） ${master}　対戦成績 ${SAVE.vs.win}勝${SAVE.vs.lose}敗${SAVE.vs.draw?SAVE.vs.draw+'分':''}`;
+}
+function ionDexDetail(k){
+  if(I.isHalf(k)){const x=I.HALF[k];
+    return `<p style="margin:0 0 6px;font-weight:800">${esc(x.role)}${x.cond?'（'+esc(x.cond)+'）':''}</p>
+      <div class="rev"><div class="it ok" style="font-size:15px">${esc(x.eq)}</div><div class="it ok">酸化数：${esc(x.ox)}</div>
+      <div class="it ok">e⁻ ${x.need.e||0}・H⁺ ${x.need.H||0}・H₂O ${x.need.H2O||0}${x.need.OH?'・OH⁻ '+x.need.OH:''}</div></div>`;}
+  const d=I.BYID[k];
+  return `<p style="margin:0 0 6px;font-weight:800">${esc(d.n)}（${esc(d.k)}${d.cn?`・配位数${d.cn}`:''}）</p>
+    <div class="rev"><div class="it ok">イオン：${esc(Object.entries(d.parts).map(([x,n])=>I.PART[x].label+(n>1?'×'+n:'')).join('　'))}</div>${d.p.map(x=>`<div class="it ok">${esc(x)}</div>`).join('')}</div>`;
+}
 // 検出試薬の結果の表（化合物1つ、または見分けの2つ）
 function testTable(ids,hl){
   const mark=(id,t)=>{const r=O.result(id,t);return r==='+'?`<b class="tp">＋</b><small>${esc(O.resultText(id,t))}</small>`:r==='-'?'<span class="tn">−</span>':'<span class="tq" title="教科書・文献で扱いが割れる、または反応が複雑なのでこのゲームでは使わない">？</span>';};
@@ -348,6 +404,10 @@ function orgDetail(k){
     ${testTable([d.id])}<p class="note2">＋＝変化が起きる、−＝変化なし、？＝このゲームでは判定に使わない</p>`;
 }
 $('dexList').addEventListener('click',e=>{
+  const bi=e.target.closest('[data-dxi]');
+  if(bi){const k=bi.dataset.dxi;if(!I.known(k))return;const m=mst(k,'ion');
+    overlay(`<h2>${I.isHalf(k)?'半反応式':I.disp(k)}</h2>${ionDexDetail(k)}
+      <p style="font-size:12px">正解 ${m.ok} 回 / ミス ${m.ng} 回 / 習熟 ${stars3(m.box)}</p><button class="btn" data-ov="close">閉じる</button>`);return;}
   const bo=e.target.closest('[data-dxo]');
   if(bo){const k=bo.dataset.dxo;if(!O.known(k))return;const m=mst(k,'org');
     overlay(`<h2>${O.isPair(k)?'見分け':fmt(O.BYID[k].f)}</h2>${orgDetail(k)}
@@ -377,7 +437,7 @@ function startSolo(stageId,g=SAVE.g){
   const cfg={g,busy:SAVE.busy,auto:SAVE.ui.auto,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
-  if(!(g==='atom'?SAVE.tutA:g==='org'?SAVE.tutO:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
+  if(!(g==='atom'?SAVE.tutA:g==='org'?SAVE.tutO:g==='ion'?SAVE.tutI:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
   else countdown(beginLocal);
 }
 function beginLocal(){
@@ -671,6 +731,18 @@ const RULES_O={
     <li>おじゃまは<b>3.5秒後</b>に着弾。それまでに自分も届ければ<b>相殺</b>。</li>
     <li>鍋は<b>客ごと×プレイヤーごと</b>。別の化合物・見分けられない試薬は−5。</li></ul>`
 };
+const RULES_I={
+  coop:`<b>協力のルール（無機イオンモード）</b><ul style="margin:4px 0 0;padding-left:18px">
+    <li><b>棚の分担</b>：2人なら<b>陽イオン担当</b>と<b>陰イオン担当</b>に分かれる（配位子・e⁻・H₂O は半分ずつ）。ほぼ全部の物質が2人のイオンを合わせないと組めない。</li>
+    <li><b>客ごとに鍋が1つ</b>。入れたイオンは人ごとに分けて表示され、<b>全員分を合わせて判定</b>（自分が Al³⁺×2、仲間が SO₄²⁻×3 → 硫酸アルミニウム）。</li>
+    <li>担当外をタップすると担当者に<b>リクエスト</b>。相手がタップすると<b>あなたが選んでいる客の鍋</b>に入る。</li>
+    <li>半反応式は e⁻・H⁺・H₂O の数を2人で合わせる。<b>40秒ごとに棚替え</b>。2人以上で入れた鍋は<b>連携ボーナス×1.2</b>。</li></ul>`,
+  versus:`<b>対戦のルール（無機イオンモード）</b><ul style="margin:4px 0 0;padding-left:18px">
+    <li>注文ボードは全員共通。<b>先に正しく届けた人</b>だけが得点。</li>
+    <li>届けると首位の相手に<b>おじゃま</b>。イオンが多い物質・係数の大きい半反応式、VIP、4連続以上、ラッシュ中ほど強い。</li>
+    <li>おじゃまは<b>3.5秒後</b>に着弾。それまでに自分も届ければ<b>相殺</b>。</li>
+    <li>鍋は<b>客ごと×プレイヤーごと</b>。別の物質を作ると−5。</li></ul>`
+};
 function renderLobby(){
   const ses=SES;if(!ses)return;
   const host=ses.role==='host';
@@ -695,7 +767,7 @@ function renderLobby(){
   $('lobCount').textContent=`${ps.length} / 4`;
   $('lobMode').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.mode===cfg.mode);b.disabled=!host;});
   $('lobGame').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.g===g);b.disabled=!host;});
-  $('lobRules').innerHTML=(g==='atom'?RULES_A:g==='org'?RULES_O:RULES)[cfg.mode]||'';
+  $('lobRules').innerHTML=(g==='atom'?RULES_A:g==='org'?RULES_O:g==='ion'?RULES_I:RULES)[cfg.mode]||'';
   let sh='';
   [...stagesOf(g),{id:'rv',name:'苦手ミックス',desc:`全員の苦手な${UNIT[g]}（★2以下）を集中注文`}].forEach((st,i)=>{
     sh+=`<button class="lst${st.id===cfg.stageId?' on':''}" data-st="${st.id}" ${host?'':'disabled'}><b>${st.lvl?`<span class="lvl lv${i+1}">${esc(st.lvl)}</span>`:''}${esc(st.name)}</b><span>${esc(st.desc)}</span></button>`;
@@ -847,30 +919,37 @@ function sigOrders(V){
 }
 // 鍋の中身（全員がいつでも見えるように伝票に大きく載せる）
 const HEATBTN=['🌡常温','🔥加熱','🔥高温高圧'];
-// 官能基モードの部品チップ・鍋・ボタン（反応式・組成モードの表示はそのまま）
-function chipO([id,n]){return `<span class="chip" data-act="chip" data-s="${esc(id)}">${esc(O.label(id))}${n>1?`<sub>×${n}</sub>`:''}</span>`;}
-function potInnerO(V,o,p){
-  const st=potState(p),items=p?p.items:[],pair=O.isPair(o.k);
-  if(st==='heat')return `<div class="pin heat"><div class="eqp">${pair?`${esc(O.label('@'+p.cat))} で調べる`:items.map(([id,n])=>esc(O.label(id))+(n>1?'×'+n:'')).join(' ')}</div><div class="pbar"><i data-pbar></i></div><span class="pst">${pair?'判定中…':'組み立て中…'}</span></div>`;
+// 部品で組むモード（官能基・無機イオン）のチップ・鍋・ボタン（反応式・組成モードの表示はそのまま）
+const busyText=(V,k)=>{const kd=PM[V.g].kind(k);return kd==='pair'?'判定中…':kd==='half'?'確かめ中…':'組み立て中…';};
+function emptyText(V,o){
+  const kd=PM[V.g].kind(o.k),port=isPort();
+  if(kd==='pair')return port?'↓ 試薬を1つ選ぶ':'下段の試薬を1つ選ぶ';
+  if(kd==='half')return port?'↓ e⁻・H⁺・H₂O を入れる':'e⁻・H⁺・H₂O の数を合わせる';
+  const u=PM[V.g].unit;return port?`↓ ${u}をタップ`:`← ${u}の棚をタップ →`;
+}
+function chipP(V,[id,n]){return `<span class="chip" data-act="chip" data-s="${esc(id)}">${esc(PM[V.g].M.label(id))}${n>1?`<sub>×${n}</sub>`:''}</span>`;}
+function potInnerP(V,o,p){
+  const st=potState(p),items=p?p.items:[],M=PM[V.g].M,pair=PM[V.g].kind(o.k)==='pair';
+  if(st==='heat')return `<div class="pin heat"><div class="eqp">${pair?`${esc(M.label('@'+p.cat))} で調べる`:items.map(([id,n])=>esc(M.label(id))+(n>1?'×'+n:'')).join(' ')}</div><div class="pbar"><i data-pbar></i></div><span class="pst">${busyText(V,o.k)}</span></div>`;
   if(st==='fail')return `<div class="pin fail">✗ ${esc(p.fail?p.fail.why:'失敗')}</div>`;
   if(st==='fire')return `<div class="pin fire">🔥 燃えている！ あと${4-p.taps}回</div>`;
-  if(!items.length&&!(p&&p.cat))return `<div class="pin empty">${o.id===UI.sel?(pair?(isPort()?'↓ 試薬を1つ選ぶ':'下段の試薬を1つ選ぶ'):(isPort()?'↓ 部品をタップ':'← 部品の棚をタップ →')):'空の鍋'}</div>`;
+  if(!items.length&&!(p&&p.cat))return `<div class="pin empty">${o.id===UI.sel?emptyText(V,o):'空の鍋'}</div>`;
   const coop=V.mode==='coop';
   const mine=coop?items.map(it=>[it[0],(it[3]&&it[3][me()])||0]).filter(it=>it[1]>0):items;
-  let h=mine.map(chipO).join('');
+  let h=mine.map(it=>chipP(V,it)).join('');
   if(coop)for(const q of V.order){
     if(q===me())continue;
-    const part=items.filter(it=>it[3]&&it[3][q]>0).map(it=>`<span class="mc">${esc(O.label(it[0]))}${it[3][q]>1?`<sub>×${it[3][q]}</sub>`:''}</span>`);
+    const part=items.filter(it=>it[3]&&it[3][q]>0).map(it=>`<span class="mc">${esc(M.label(it[0]))}${it[3][q]>1?`<sub>×${it[3][q]}</sub>`:''}</span>`);
     if(part.length){const nm=V.players[q]?V.players[q].name:'?';h+=`<span class="grp" style="--dc:${colorOf(V,q)}" title="${esc(nm)}が入れた"><b>${esc([...nm][0]||'?')}</b>${part.join('')}</span>`;}
   }
   return `<div class="pin mix">${h||'<span class="mine-none">あなたの分はまだない</span>'}</div>`;
 }
-function cardBtnsO(V,o,p){
+function cardBtnsP(V,o,p){
   const st=potState(p),has=p&&p.items.length>0;
   if(st==='heat')return '';
   if(st==='fail')return `<button data-act="dump" class="wide">鍋を空にしてやり直す</button>`;
   if(st==='fire')return `<button data-act="ext" class="ext wide">消火！</button>`;
-  if(O.isPair(o.k))return '';
+  if(PM[V.g].kind(o.k)==='pair')return '';
   const auto=V.auto?'<span class="autob">自動</span>':'';
   return `<button class="go" data-act="react" ${has?'':'disabled'}>組む${auto}</button><button class="dump" data-act="dump" aria-label="鍋を空にする" ${has?'':'disabled'}>捨</button>`;
 }
@@ -880,7 +959,7 @@ function itemChip(V,[id,n,poured]){
   return `<span class="chip${poured?' poured':''}" data-act="chip" data-s="${esc(id)}">${!poured&&n>1?`<b class="co">${n}</b>`:''}${fmt(s.f)}${s.cc?`<small>${s.cc}</small>`:''}</span>`;
 }
 function potInner(V,o,p){
-  if(V.g==='org')return potInnerO(V,o,p);
+  if(isParts(V.g))return potInnerP(V,o,p);
   const st=potState(p),atom=V.g==='atom',items=p?p.items:[];
   if(st==='heat')return `<div class="pin heat"><div class="eqp">${items.map(([id,n,x])=>`${!x&&n>1?n:''}${fmt(atom?id:fOf(id))}`).join(atom?' ':' + ')}${atom?'':` →${p.cat?`<small>${fmt(cellLabel('@'+p.cat))}</small>`:''}`}</div><div class="pbar"><i data-pbar></i></div><span class="pst">${atom||p.heat?'加熱中…':'反応中…'}</span></div>`;
   if(st==='fail')return `<div class="pin fail">✗ ${atom&&p.fail&&p.fail.label?fmt(p.fail.label)+' ':''}${esc(p.fail?p.fail.why:'失敗')}</div>`;
@@ -906,7 +985,7 @@ function potInner(V,o,p){
   return `<div class="pin mix">${h||'<span class="mine-none">あなたの分はまだない</span>'}</div>`;
 }
 function cardBtns(V,o,p){
-  if(V.g==='org')return cardBtnsO(V,o,p);
+  if(isParts(V.g))return cardBtnsP(V,o,p);
   const st=potState(p),atom=V.g==='atom',has=p&&p.items.length>0;
   if(st==='heat')return '';
   if(st==='fail')return `<button data-act="dump" class="wide">鍋を空にしてやり直す</button>`;
@@ -939,18 +1018,23 @@ function cardClass(V,o){
 function cardHead(V,o,k){
   const isName=o.mode==='name',hn=E.hintsOf(V,o,me()),p=myPot(V,o);
   let clue,tags='',proc='',rev='';
-  if(V.g==='org'){
-    if(O.isPair(o.k)){
+  if(isParts(V.g)){
+    const X=PM[V.g],kd=X.kind(o.k);
+    if(kd==='pair'){
       const P=O.PAIR[o.k];
       clue=`<div class="clue name pairq">${esc(O.BYID[P.a].n)}<small> と </small>${esc(O.BYID[P.b].n)}</div>`;
       proc='<div class="proc">を見分ける試薬は？</div>';tags='<span class="tag">見分け</span>';
+    }else if(kd==='half'){
+      const h=I.HALF[o.k];
+      clue=`<div class="clue name halfq">${esc(h.core)}<small>${esc(h.role)}${h.cond?'・'+esc(h.cond):''}</small></div>`;
+      tags='<span class="tag">半反応式</span>';
     }else{
-      const d=O.BYID[o.k];
+      const d=X.M.BYID[o.k];
       clue=isName?`<div class="clue name">${esc(d.n)}</div>`:`<div class="clue">${esc(d.p[o.ci]||d.p[0])}</div>`;
       tags=`<span class="tag">${isName?'名前':'性質'}</span>`;
     }
-    if(hn>=1)rev+=esc(O.hint(o.k,1,o.mode));
-    if(hn>=2)rev+=' / '+(O.isPair(o.k)?esc(O.hint(o.k,2,o.mode)):O.hint(o.k,2,o.mode));
+    if(hn>=1)rev+=X.hint(o.k,1,o.mode);
+    if(hn>=2)rev+=' / '+X.hint(o.k,2,o.mode);
   }else if(V.g==='atom'){
     const d=A.BYID[o.k];
     clue=isName?`<div class="clue name">${esc(d.n)}</div>`:`<div class="clue">${esc(d.p[o.ci]||d.p[0])}</div>`;
@@ -1024,7 +1108,7 @@ function renderAct(V){
   const o=V.orders.find(x=>x.id===UI.sel),p=o&&myPot(V,o);
   if(!o){host.innerHTML='<span class="ab-msg">伝票（客）をタップして選ぶ</span>';return;}
   const st=potState(p);
-  const btns=st==='heat'?`<span class="ab-msg">${V.g==='atom'?'加熱中…':V.g==='org'?(O.isPair(o.k)?'判定中…':'組み立て中…'):'反応中…'}</span>`:(cardBtns(V,o,p)||'<span class="ab-msg">検出試薬（最下段）を1つ選ぶ</span>');
+  const btns=st==='heat'?`<span class="ab-msg">${V.g==='atom'?'加熱中…':isParts(V.g)?busyText(V,o.k):'反応中…'}</span>`:(cardBtns(V,o,p)||'<span class="ab-msg">検出試薬（最下段）を1つ選ぶ</span>');
   host.innerHTML=`<b class="num" style="--mc:${colorOf(V,me())}">${V.orders.indexOf(o)+1}</b>${btns}`;
   host.className=host.id==='ptAct'?'pt-act s-'+st:'actbar s-'+st;
 }
@@ -1033,7 +1117,7 @@ function renderTarget(V){
   const o=V.orders.find(x=>x.id===UI.sel);
   if(!o){el.innerHTML='伝票（客）を選ぶと入れ先が出る';el.style.removeProperty('--mc');return;}
   const T=(E.RULES[V.g]||E.RULES.rx).tgt(o.k);
-  const nm=T.pair?'見分け：'+esc(T.n):o.mode==='name'||E.hintsOf(V,o,me())>=1?esc(T.n):'性質の注文';
+  const nm=T.pair?'見分け：'+esc(T.n):T.half?'半反応式：'+esc(T.n):o.mode==='name'||E.hintsOf(V,o,me())>=1?esc(T.n):'性質の注文';
   el.innerHTML=`入れ先 → <b class="num">${V.orders.indexOf(o)+1}</b> ${nm}`;el.style.setProperty('--mc',colorOf(V,me()));
 }
 /* ---------- 試薬棚 ---------- */
@@ -1061,7 +1145,7 @@ function symHTML(lab){
 }
 function buildTable(g){
   const T=$('ptable'),L=$('ptL'),R=$('ptR');
-  T.classList.toggle('rx',g!=='atom');T.classList.toggle('pt',g==='atom');T.classList.toggle('org',g==='org');T.classList.remove('dark');
+  T.classList.toggle('rx',g!=='atom');T.classList.toggle('pt',g==='atom');T.classList.toggle('org',g==='org');T.classList.toggle('ion',g==='ion');T.classList.toggle('parts',isParts(g));T.classList.remove('dark');
   if(g==='atom'){
     // 周期表を 1〜9族（左端）と 10〜18族（右端）に分けて置く
     const stk=document.body.classList.contains('pt-stack');
@@ -1086,10 +1170,11 @@ function buildTable(g){
     hr+=`<div class="pt-target" id="ptTarget" style="grid-column:${1+o2} / ${9+o2};grid-row:2"></div>`;
     hr+=`<div class="pt-note" style="grid-column:${1+o2} / ${4+o2};grid-row:3 / 5">10〜12族は<br>遷移元素</div>`;
     L.innerHTML=hl;R.innerHTML=hr;
-  }else if(g==='org'){
-    // 官能基モード：左に骨格、右に官能基（4列×3段）、最下段に検出試薬（左右4つずつ）
-    L.innerHTML=`<div class="shelf-cap" id="ptInfo">${ORG_CAP}</div>`+O.SK.map(cellHTMLO).join('')+`<div class="shelf-cap cat">検出試薬</div>`+O.TIDS.slice(0,4).map(t=>cellHTMLO('@'+t)).join('');
-    R.innerHTML=`<div class="shelf-cap pt-target" id="ptTarget"></div>`+O.FG.map(cellHTMLO).join('')+`<div class="shelf-cap cat">（見分けの注文で1つ選ぶ）</div>`+O.TIDS.slice(4).map(t=>cellHTMLO('@'+t)).join('');
+  }else if(isParts(g)){
+    // 官能基モード：左に骨格・右に官能基・最下段に検出試薬／無機イオンモード：左に陽イオン・右に陰イオン・最下段に配位子と半反応式の部品
+    const X=PM[g],sh=X.shelf,cell=k=>cellHTMLP(k,g);
+    L.innerHTML=`<div class="shelf-cap" id="ptInfo">${esc(X.cap)}</div>`+sh.L.main.map(cell).join('')+`<div class="shelf-cap cat">${esc(sh.L.cap2)}</div>`+sh.L.bottom.map(cell).join('');
+    R.innerHTML=`<div class="shelf-cap pt-target" id="ptTarget"></div>`+sh.R.main.map(cell).join('')+`<div class="shelf-cap cat">${esc(sh.R.cap2)}</div>`+sh.R.bottom.map(cell).join('');
   }else{
     // 試薬棚も左右に4列ずつ
     const half=(c0,c1)=>SHELF.map(row=>row.slice(c0,c1).map(cellHTML).join('')).join('');
@@ -1099,25 +1184,26 @@ function buildTable(g){
   UI.sig.f=null;UI.sig.a=null;UI.tblKey=g+'|'+document.body.classList.contains('pt-stack');
   requestAnimationFrame(layoutGame);
 }
-const ORG_CAP='骨格・官能基：タップで選んだ客の鍋へ';
 const OCLS={H:'alk',CH3:'alk',C2H5:'alk',C3H7:'alk',C6H5:'aro',oC6H4:'aro',mC6H4:'aro',pC6H4:'aro',CH2CH:'uns',cisCHCH:'uns',trCHCH:'uns',CHC:'uns',
   OH:'oh',CHOH:'oh',CHO:'cho',CO:'co',COOH:'cooh',COO:'coo',O:'eth',NH2:'n',NO2:'n',NHCO:'n',SO3H:'s',Cl:'cl'};
-// 部品ラベルの幅の見積もり（em）：全角1、英大文字0.65、ダッシュ・下付き数字0.5
-const labWO=t=>[...t].reduce((w,ch)=>w+(/[^\x00-\x7f₀-₉–]/.test(ch)?1:/[₀-₉–]/.test(ch)?0.5:/[A-Z=≡]/.test(ch)?0.65:/[()]/.test(ch)?0.35:0.55),0);
+// 部品ラベルの幅の見積もり（em）：全角1、英大文字0.65、ダッシュ・上付き/下付きの数字と符号0.5
+const labWO=t=>[...t].reduce((w,ch)=>w+(/[^\x00-\x7f₀-₉⁰-⁹⁺⁻²³¹–]/.test(ch)?1:/[₀-₉⁰-⁹⁺⁻²³¹–]/.test(ch)?0.5:/[A-Z=≡]/.test(ch)?0.65:/[()]/.test(ch)?0.35:0.55),0);
 // マスが狭いときに2行に分ける位置（読み違えない所だけ）
 const OBRK={'CH₂=CH–':'CH₂=|CH–','–CH=CH–':'–CH=|CH–','HC≡C–':'HC≡|C–','–CH(OH)–':'–CH|(OH)–','–NHCO–':'–NH|CO–',
-  'NaHCO₃':'Na|HCO₃','I₂+NaOH':'I₂|+NaOH','o-C₆H₄':'o-|C₆H₄','m-C₆H₄':'m-|C₆H₄','p-C₆H₄':'p-|C₆H₄'};
-function cellHTMLO(key){
-  const test=key[0]==='@',lab=O.label(key),nm=O.cellName(key);
+  'NaHCO₃':'Na|HCO₃','I₂+NaOH':'I₂|+NaOH','o-C₆H₄':'o-|C₆H₄','m-C₆H₄':'m-|C₆H₄','p-C₆H₄':'p-|C₆H₄',
+  'CH₃COO⁻':'CH₃|COO⁻','Cr₂O₇²⁻':'Cr₂|O₇²⁻','S₂O₃²⁻':'S₂|O₃²⁻','H₂PO₄⁻':'H₂|PO₄⁻','HPO₄²⁻':'H|PO₄²⁻','C₂O₄²⁻':'C₂|O₄²⁻',
+  'MnO₄⁻':'Mn|O₄⁻','CrO₄²⁻':'Cr|O₄²⁻','HSO₄⁻':'H|SO₄⁻','HCO₃⁻':'H|CO₃⁻','ClO₃⁻':'Cl|O₃⁻','SO₄²⁻':'S|O₄²⁻','SO₃²⁻':'S|O₃²⁻','CO₃²⁻':'C|O₃²⁻','PO₄³⁻':'P|O₄³⁻'};
+function cellHTMLP(key,g){
+  const M=PM[g].M,lab=M.label(key),nm=M.cellName(key);
   const [a,b]=lab.split(' ');                    // 「–CH=CH– シス」の シス／トランス は下に小さく
-  const jp=/[^\x00-\x7f₀-₉–≡]/.test(a);
+  const jp=/[^\x00-\x7f₀-₉⁰-⁹⁺⁻²³¹–≡]/.test(a);
   const px=jp?(a.length<=3?13:11.5):Math.max(10,Math.min(16,Math.floor(46/labWO(a)*10)/10));
   const two=OBRK[a]?`<span class="l2">${OBRK[a].split('|').map(esc).join('<br>')}</span>`:'';
-  return `<button class="cell ${test?'r-cat':'o-'+OCLS[key]}" data-el="${esc(key)}" aria-label="${esc(nm)}" title="${esc(nm)}"><span class="sym${jp?' jp':''}" data-px="${px}" style="font-size:${px}px"><span class="l1">${esc(a)}</span>${two}${b?`<small class="cc">${esc(b)}</small>`:''}</span><span class="nm">${esc(nm.replace(/（.*）/,''))}</span><span class="bd"></span></button>`;
+  return `<button class="cell ${PM[g].cls(key)}" data-el="${esc(key)}" aria-label="${esc(nm)}" title="${esc(nm)}"><span class="sym${jp?' jp':''}" data-px="${px}" style="font-size:${px}px"><span class="l1">${esc(a)}</span>${two}${b?`<small class="cc">${esc(b)}</small>`:''}</span><span class="nm">${esc(nm.replace(/（.*）/,''))}</span><span class="bd"></span></button>`;
 }
-// 実際の幅を測って、マスに収まるまで文字を小さくする（官能基モードの棚）
-function fitOrgLabels(){
-  const T=$('ptable');if(!T||!T.classList.contains('org'))return;
+// 実際の幅を測って、マスに収まるまで文字を小さくする（部品で組むモードの棚）
+function fitShelfLabels(){
+  const T=$('ptable');if(!T||!T.classList.contains('parts'))return;
   T.querySelectorAll('.cell[data-el] .sym:not(.jp)').forEach(y=>{   // 日本語のラベルは折り返すので縮めない
     const c=y.parentElement,base=+y.dataset.px||14,avail=c.clientWidth-6;if(avail<=0)return;
     y.classList.remove('two');y.style.fontSize=base+'px';
@@ -1183,8 +1269,8 @@ function applyOrient(){
   // 組成モードの縦持ち：幅が足りなければ周期表を上下2段（1〜9族／10〜18族）にする
   const G=$('game'),gw=Math.min(innerWidth,port&&!sp?innerHeight*0.62:innerWidth);
   b.toggle('pt-stack',port&&$('ptable').classList.contains('pt')&&gw<600);
-  // 官能基モードの縦持ち（スマホ）：骨格と官能基の棚を上下に重ね、6列にしてマスを広げる
-  b.toggle('org-stack',port&&$('ptable').classList.contains('org')&&gw<600);
+  // 部品で組むモードの縦持ち（スマホ）：左右の棚を上下に重ね、6列にしてマスを広げる
+  b.toggle('shelf-stack',port&&$('ptable').classList.contains('parts')&&gw<600);
   const V=view();
   if(V&&CUR==='game'&&UI.tblKey!==V.g+'|'+b.contains('pt-stack')){UI.sig={};buildTable(V.g);}
   UI.sig.a=null;
@@ -1193,10 +1279,10 @@ function applyOrient(){
 // 縦持ち：上から HUD・伝票・（操作ボタン）・棚。棚の行の高さを画面に合わせて決め、残りを伝票に回す
 function layoutGame(){
   const G=$('game'),T=$('ptable');if(!G)return;
-  for(const H of [$('ptL'),$('ptR')])if(H){H.style.removeProperty('grid-template-rows');H.style.removeProperty('--cs');}
+  for(const H of [$('ptL'),$('ptR')])if(H){H.style.removeProperty('grid-template-rows');H.style.removeProperty('grid-template-columns');H.style.removeProperty('--cs');}
   T.style.removeProperty('--rxk');
   const ob=$('orders'),slots=+getComputedStyle(ob).getPropertyValue('--slots')||4;
-  if(!isPort()){G.style.removeProperty('grid-template-rows');G.style.removeProperty('grid-template-areas');setOrderCols(ob,slots);fitTable();fitOrgLabels();return;}
+  if(!isPort()){G.style.removeProperty('grid-template-rows');G.style.removeProperty('grid-template-areas');setOrderCols(ob,slots);fitTable();fitShelfLabels();return;}
   if(!G.classList.contains('on'))return;
   const cs=getComputedStyle(G),gap=parseFloat(cs.rowGap)||5;
   const W=G.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
@@ -1205,11 +1291,12 @@ function layoutGame(){
   const hud=G.querySelector('.hud').offsetHeight,mpOn=$('mpbar').classList.contains('on'),mp=mpOn?$('mpbar').offsetHeight:0;
   const ab=$('actbar'),act=stack?0:(ab.offsetHeight||40);
   const tr=[['hud hud','auto']];if(mpOn)tr.push(['mp mp','auto']);tr.push(['orders orders','minmax(0,1fr)']);if(!stack)tr.push(['act act','auto']);
-  const nTbl=stack||document.body.classList.contains('org-stack')?2:1;
+  const nTbl=stack||document.body.classList.contains('shelf-stack')?2:1;
   const avail=H-hud-mp-act-(tr.length+nTbl-1)*gap;
   const rows=portRows(slots,W);
   const fsk={s:.9,m:1,l:1.15}[SAVE.ui.fs]||1;
-  const ordMin=rows*Math.round((rows>1?82:88)*fsk)+(rows-1)*6;
+  // 部品で組むモードは鍋の中身（チップ）が多いので、伝票を少し高めに取る
+  const ordMin=rows*Math.round(((rows>1?82:88)+(T.classList.contains('parts')?14:0))*fsk)+(rows-1)*6;
   let rh,hh,tpl,cw;
   if(atom){
     const fix=6+8+10+7*2,units=6.6;               // 枠・余白・族の行・行間、第7周期は0.6行
@@ -1219,15 +1306,18 @@ function layoutGame(){
     rh=Math.floor(Math.max(22,Math.min(rh,cw*(stack?1.15:1.5),64)));
     const r7=Math.max(14,Math.round(rh*0.6));
     hh=fix+6*rh+r7;tpl=`10px repeat(6,${rh}px) ${r7}px`;
-  }else if(document.body.classList.contains('org-stack')){
-    // 官能基モード（縦持ち・スマホ）：上段＝骨格、下段＝官能基。各6列×2段＋検出試薬1段
-    const fix=6+8+13+13+4*2;
-    cw=(W-6-8-5*2)/6;
-    rh=(avail-ordMin-2*fix)/6;
-    rh=Math.floor(Math.max(30,Math.min(rh,cw*0.95,56)));
-    hh=fix+3*rh;tpl=`13px repeat(2,${rh}px) 13px ${rh}px`;
+  }else if(document.body.classList.contains('shelf-stack')){
+    // 部品で組むモード（縦持ち・スマホ）：上段＝左の棚、下段＝右の棚。官能基は6列、無機イオンは7列
+    const X=PM[curG()],sh=X.shelf,nc=X.stackCols||6,mr=Math.max(Math.ceil(sh.L.main.length/nc),Math.ceil(sh.R.main.length/nc));
+    const fix=6+8+13+13+(mr+2)*2;
+    cw=(W-6-8-(nc-1)*2)/nc;
+    for(const h of [$('ptL'),$('ptR')])h.style.gridTemplateColumns=`repeat(${nc},minmax(0,1fr))`;
+    rh=(avail-ordMin-2*fix)/(2*(mr+1));
+    rh=Math.floor(Math.max(28,Math.min(rh,cw*0.95,56)));
+    hh=fix+(mr+1)*rh;tpl=`13px repeat(${mr},${rh}px) 13px ${rh}px`;
   }else{
-    const nr=T.classList.contains('org')?3:6;    // 試薬棚6段／官能基モードの部品3段（＋最下段）
+    const sh=T.classList.contains('parts')&&PM[curG()].shelf;
+    const nr=sh?Math.max(Math.ceil(sh.L.main.length/4),Math.ceil(sh.R.main.length/4)):6;    // 試薬棚6段／部品の棚（＋最下段）
     const fix=6+8+13+13+(nr+2)*2;
     cw=((W-gap)/2-6-8-3*2)/4;
     rh=(avail-ordMin-fix)/(nr+1);
@@ -1235,11 +1325,11 @@ function layoutGame(){
     hh=fix+(nr+1)*rh;tpl=`13px repeat(${nr},${rh}px) 13px ${rh}px`;
     T.style.setProperty('--rxk',Math.max(1,Math.min(1.3,(Math.min(cw,rh)-6)/34)).toFixed(2));
   }
-  if(stack||document.body.classList.contains('org-stack'))tr.push(['tl tl',hh+'px'],['tr tr',hh+'px']);else tr.push(['tl tr',hh+'px']);
+  if(stack||document.body.classList.contains('shelf-stack'))tr.push(['tl tl',hh+'px'],['tr tr',hh+'px']);else tr.push(['tl tr',hh+'px']);
   G.style.gridTemplateAreas=tr.map(x=>`"${x[0]}"`).join(' ');
   G.style.gridTemplateRows=tr.map(x=>x[1]).join(' ');
   for(const h of [$('ptL'),$('ptR')]){h.style.gridTemplateRows=tpl;h.style.setProperty('--cs',Math.floor(Math.min(cw,rh*1.3))+'px');}
-  setOrderCols(ob,slots);fitOrgLabels();
+  setOrderCols(ob,slots);fitShelfLabels();
 }
 let rzT=0;
 function onResize(){cancelAnimationFrame(rzT);rzT=requestAnimationFrame(applyOrient);}
@@ -1248,10 +1338,10 @@ window.addEventListener('orientationchange',()=>setTimeout(onResize,250));
 // タップした元素・試薬の情報を表示（覚えるための手がかり）
 let infoT=0;
 function showInfo(g,k){
-  if(g==='org'){
-    const cap=$('ptInfo');if(!cap)return;
-    cap.textContent=`${O.label(k)}：${O.cellName(k)}`;cap.classList.add('info');
-    clearTimeout(infoT);infoT=setTimeout(()=>{cap.textContent=ORG_CAP;cap.classList.remove('info');},1800);
+  if(isParts(g)){
+    const cap=$('ptInfo'),X=PM[g];if(!cap)return;
+    cap.textContent=`${X.M.label(k)}：${X.M.cellName(k)}`;cap.classList.add('info');
+    clearTimeout(infoT);infoT=setTimeout(()=>{cap.textContent=X.cap;cap.classList.remove('info');},1800);
     return;
   }
   if(g==='atom'){
@@ -1385,7 +1475,7 @@ function tryAdd(s,cell){
   if(!req&&!pendingToMe&&p&&s[0]!=='@'){
     const x=p.items.find(y=>y[0]===s);
     if(x&&(x[2]||x[1]>=RL.maxCoef))return false;
-    if(!x&&p.items.length>=RL.maxSpecies){toast(`${V.g==='atom'?'元素':V.g==='org'?'部品':'試薬'}は${RL.maxSpecies}種類まで`,'ng');return false;}
+    if(!x&&p.items.length>=RL.maxSpecies){toast(`${V.g==='atom'?'元素':isParts(V.g)?PM[V.g].unit:'試薬'}は${RL.maxSpecies}種類まで`,'ng');return false;}
   }
   act({t:'add',s,o:o?o.id:null});
   showInfo(V.g,s);
@@ -1513,7 +1603,7 @@ $('ov').addEventListener('click',e=>{
   const a=b.dataset.ov;
   switch(a){
     case 'close':closeOverlay();break;
-    case 'tutgo':if(curG()==='atom')SAVE.tutA=true;else if(curG()==='org')SAVE.tutO=true;else SAVE.tut=true;persist();closeOverlay();if(SES&&SES.waitTut){SES.waitTut=false;countdown(beginLocal);}break;
+    case 'tutgo':if(curG()==='atom')SAVE.tutA=true;else if(curG()==='org')SAVE.tutO=true;else if(curG()==='ion')SAVE.tutI=true;else SAVE.tut=true;persist();closeOverlay();if(SES&&SES.waitTut){SES.waitTut=false;countdown(beginLocal);}break;
     case 'resume':act({t:'resume'});closeOverlay();UI.pauseShown=false;break;
     case 'quit':
       closeOverlay();
@@ -1571,16 +1661,24 @@ function reviewHTMLA(r,mode){
   }
   return h;
 }
+// 無機イオンモード：結果画面の見出しと詳細
+const ionTitle=k=>I.isHalf(k)?`<b>半反応式</b>　${esc(I.HALF[k].core)}${I.HALF[k].cond?'（'+esc(I.HALF[k].cond)+'）':''}`:`<b>${I.disp(k)}</b>　${esc(I.BYID[k].n)}`;
+const ionDetail=k=>{
+  if(I.isHalf(k)){const h=I.HALF[k];return `<div class="note2">${esc(h.eq)}　［${esc(h.ox)}］</div>`;}
+  const d=I.BYID[k];return `<br>イオン：${esc(Object.entries(d.parts).map(([x,n])=>I.PART[x].label+(n>1?'×'+n:'')).join(' '))}<br>${esc(d.p.join('／'))}`;
+};
 function reviewHTMLO(r,mode){
   const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
+  const ion=r.g==='ion',G=ion?I:O;
   const ng=[],ok=[];const seen=new Set();
   (r.log||[]).slice().reverse().forEach(l=>{
-    if(!O.known(l.k)||seen.has(l.k))return;seen.add(l.k);
+    if(!G.known(l.k)||seen.has(l.k))return;seen.add(l.k);
     const mine=mode!=='versus'||l.by===M;
     if(l.ok&&!l.hinted&&mine)ok.push(l);else ng.push(l);
   });
-  const title=k=>O.isPair(k)?`<b>見分け</b>　${esc(O.BYID[O.PAIR[k].a].n)}／${esc(O.BYID[O.PAIR[k].b].n)} → <b>${esc(O.answerText(k))}</b>`:`<b>${fmt(O.BYID[k].f)}</b>　${esc(O.BYID[k].n)}`;
+  const title=k=>ion?ionTitle(k):O.isPair(k)?`<b>見分け</b>　${esc(O.BYID[O.PAIR[k].a].n)}／${esc(O.BYID[O.PAIR[k].b].n)} → <b>${esc(O.answerText(k))}</b>`:`<b>${fmt(O.BYID[k].f)}</b>　${esc(O.BYID[k].n)}`;
   const detail=k=>{
+    if(ion)return ionDetail(k);
     if(O.isPair(k)){const p=O.PAIR[k];return p.ok.map(t=>`<div class="note2">${esc(O.TEST[t].label)}：${esc(O.BYID[p.a].n)} ${esc(O.resultText(p.a,t))}／${esc(O.BYID[p.b].n)} ${esc(O.resultText(p.b,t))}</div>`).join('');}
     const d=O.BYID[k];return `<br>部品：${esc(Object.entries(d.parts).map(([x,n])=>O.PART[x].label+(n>1?'×'+n:'')).join(' '))}<br>${esc(d.p.join('／'))}`;
   };
@@ -1589,19 +1687,19 @@ function reviewHTMLO(r,mode){
     h+=`<div class="sec-h">要復習（次回よく注文される）</div><div class="rev">`+ng.map(l=>{
       let why;
       if(l.ok)why=l.by===M||mode==='solo'?'ヒント使用':`${esc(nm(l.by))} が提供`;
-      else if(l.given)why=`${esc(l.given)} ${O.isPair(l.k)?'を選んだ':'を作った'}${mode!=='solo'&&l.by!==M?`（${esc(nm(l.by))}）`:''}`;
+      else if(l.given)why=`${esc(l.given)} ${!ion&&O.isPair(l.k)?'を選んだ':'を作った'}${mode!=='solo'&&l.by!==M?`（${esc(nm(l.by))}）`:''}`;
       else why=esc(l.why||'');
       return `<div class="it">${title(l.k)}　<span class="why">${why}</span>${detail(l.k)}</div>`;
     }).join('')+`</div>`;
   }
   if(ok.length){
-    h+=`<div class="sec-h">ノーヒントで正解</div><div class="rev">`+ok.map(l=>`<div class="it ok">${title(l.k)}　<span style="color:#e0a100">${stars3(mst(l.k,'org').box)}</span></div>`).join('')+`</div>`;
+    h+=`<div class="sec-h">ノーヒントで正解</div><div class="rev">`+ok.map(l=>`<div class="it ok">${title(l.k)}　<span style="color:#e0a100">${stars3(mst(l.k,r.g).box)}</span></div>`).join('')+`</div>`;
   }
   return h;
 }
 function reviewHTML(r,mode){
   if(r.g==='atom')return reviewHTMLA(r,mode);
-  if(r.g==='org')return reviewHTMLO(r,mode);
+  if(isParts(r.g))return reviewHTMLO(r,mode);
   const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
   const ng=[],ok=[];const seen=new Set();
   (r.log||[]).slice().reverse().forEach(l=>{
@@ -1665,7 +1763,7 @@ function coopResults(r){
     <div class="stats"><div>提供<b>${r.team.served}</b></div><div>失敗<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
     <div class="sec-h">貢献</div><div class="rank">`+ps.map(p=>`<div class="rk" style="--pc:${COLORS[p.slot%4]}"><div class="no">${p.id===mvp?'👑':''}</div>
       <div><div class="nm">${esc(p.name)}${p.id===me()?'（あなた）':''}${p.id===mvp?'<span class="mvp">MVP</span>':''}${p.left?'（退出）':''}</div>
-      <div class="sub">提供 ${p.served}・入れた${r.g==='atom'?'原子':r.g==='org'?'部品':'試薬'} ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`).join('')+`</div>`;
+      <div class="sub">提供 ${p.served}・入れた${r.g==='atom'?'原子':isParts(r.g)?PM[r.g].unit:'試薬'} ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`).join('')+`</div>`;
   h+=nightNote()+reviewHTML(r,'coop')+mpButtons();
   overlay(h,'result');
 }
