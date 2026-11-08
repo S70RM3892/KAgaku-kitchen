@@ -568,7 +568,7 @@ function showLobby(){renderLobby();show('lobby');}
 const RULES={
   coop:`<b>協力のルール</b><ul style="margin:4px 0 0;padding-left:18px">
     <li><b>棚の分担</b>：自分の担当の試薬・触媒だけ直接入れられる。色が薄く下線のあるものは仲間の担当（下線の色＝担当者）。</li>
-    <li><b>客ごとの鍋は全員で共有</b>。伝票をタップするとその客を担当（仲間の画面に自分の色の点が出る）。同じ客の鍋に何人でも入れられる。</li>
+    <li><b>鍋は1人ずつ</b>（客ごとに自分の鍋）。伝票をタップして自分が作る客を選ぶ。同じ客を2人で別々に作っても、別々の客を作ってもいい。仲間の鍋の中身は伝票に名前つきで並んで見える。</li>
     <li>担当外をタップすると担当者に<b>リクエスト</b>。相手の画面で光り、相手がタップすると<b>あなたが選んでいる客の鍋</b>に入る（触媒もセットされる）。</li>
     <li>注文どおりにできたら自動で提供。<b>40秒ごとに棚替え</b>。2人以上で入れた鍋は<b>連携ボーナス×1.2</b>。💬でスタンプ。</li></ul>`,
   versus:`<b>対戦のルール</b><ul style="margin:4px 0 0;padding-left:18px">
@@ -580,7 +580,7 @@ const RULES={
 const RULES_A={
   coop:`<b>協力のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
     <li><b>棚の分担</b>：周期表の族ごとに担当が決まる（2人なら奇数族と偶数族）。H（1族）とO（16族）は必ず別担当なので、水・酸・有機物は連携しないと作れない。</li>
-    <li><b>客ごとの鍋は全員で共有</b>。伝票をタップするとその客を担当（仲間に色の点で見える）。</li>
+    <li><b>鍋は1人ずつ</b>（客ごとに自分の鍋）。伝票をタップして自分が作る客を選ぶ。仲間の鍋の中身も伝票に並んで見える。</li>
     <li>担当外の元素をタップすると担当者に<b>リクエスト</b>。相手がタップすると<b>あなたが選んでいる客の鍋</b>に入る。</li>
     <li>注文どおりにできたら自動で提供。<b>40秒ごとに棚替え</b>。2人以上で入れた鍋は<b>連携ボーナス×1.2</b>。</li></ul>`,
   versus:`<b>対戦のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
@@ -790,16 +790,33 @@ function cardBtns(V,o,p){
   return `${hb}<button class="go" data-act="react" ${has?'':'disabled'}>${atom?'加熱':'反応'}${auto}</button><button class="dump" data-act="dump" aria-label="鍋を空にする" ${has||(p&&p.cat)?'':'disabled'}>捨</button>`;
 }
 function cardWho(V,o,p){
-  // 協力：この客を選んでいる仲間（大きい点）と入れた人（小さい点）、対戦：この客を作っている相手
+  // 協力：この客を選んでいる仲間、対戦：この客を作っている相手
   if(V.mode==='coop'){
     const foc=V.order.filter(q=>q!==me()&&!V.players[q].left&&V.players[q].focus===o.id);
-    const by=p?Object.keys(p.by).filter(q=>V.players[q]):[];
-    return `<span class="who">${foc.map(q=>`<i class="foc" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}が担当"></i>`).join('')}${by.map(q=>`<i class="by" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}が入れた"></i>`).join('')}</span>`;
+    return `<span class="who">${foc.map(q=>`<i class="foc" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}が選択中"></i>`).join('')}</span>`;
   }
   if(V.mode==='versus'){
     return `<span class="who">${V.order.filter(q=>q!==me()&&!V.players[q].left).map(q=>{const op=o.pots[q],s2=potState(op);if(!op||(!op.items.length&&s2==='idle'))return '';return `<i class="foc${s2==='heat'?' hot':''}" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}"></i>`;}).join('')}</span>`;
   }
   return '';
+}
+// 協力：仲間それぞれの鍋（この客のぶん）を小さく並べる。選んでいる人・中身がある人だけ
+function mateRows(V,o){
+  if(V.mode!=='coop')return '';
+  const atom=V.g==='atom';
+  const rows=V.order.filter(q=>q!==me()&&!V.players[q].left).map(q=>{
+    const P=V.players[q],mp=o.pots[q],st=potState(mp),foc=P.focus===o.id;
+    const has=mp&&(mp.items.length||mp.cat);
+    if(!foc&&!has&&st==='idle')return '';
+    let body;
+    if(st==='heat')body='<span class="ms heat">反応中…</span>';
+    else if(st==='fail')body='<span class="ms fail">✗ 失敗</span>';
+    else if(st==='fire')body='<span class="ms fire">🔥</span>';
+    else if(has)body=mp.items.map(([id,n,x])=>`<span class="mc">${atom?esc(id)+(n>1?`<sub>${n}</sub>`:''):(!x&&n>1?n:'')+fmt(fOf(id))}</span>`).join('')+(mp.cat?`<span class="mc cat">${fmt(cellLabel('@'+mp.cat))}</span>`:'');
+    else body='<span class="ms">空</span>';
+    return `<div class="mate${foc?' foc':''}" style="--dc:${colorOf(V,q)}"><b>${esc(P.name)}${foc?' ▶':''}</b>${body}</div>`;
+  }).join('');
+  return rows?`<div class="mates">${rows}</div>`:'';
 }
 function cardClass(V,o){
   let cls='ticket card';if(o.vip)cls+=' vip';if(o.id===UI.sel)cls+=' sel';
@@ -837,6 +854,7 @@ function renderOrders(V){
         <button class="hint" data-act="hint" ${hn>=2?'disabled':''}>ヒント${hn?hn:''}</button></div>
       <div class="c-clue">${clue}${proc}</div>${rev?`<div class="reveal">${rev}</div>`:''}
       ${potInner(V,o,p)}
+      ${mateRows(V,o)}
       <div class="c-btns">${cardBtns(V,o,p)}</div>
       <div class="tbar"><i data-bar></i></div></div>`;
   }
@@ -977,13 +995,14 @@ function renderCells(V){
 }
 /* ---------- マルチプレイ表示 ---------- */
 function sigMP(V){
-  return V.order.map(p=>{const P=V.players[p];return [p,P.name,P.score,P.left?1:0].join(':');}).join('|');
+  return V.order.map(p=>{const P=V.players[p];return [p,P.name,P.score,P.left?1:0,V.mode==='coop'?V.orders.findIndex(o=>o.id===(p===me()?UI.sel:P.focus)):''].join(':');}).join('|');
 }
 function renderMP(V){
   const vs=V.mode==='versus';
   $('mpWho').innerHTML=V.order.map(p=>{
     const P=V.players[p];const isMe=p===me();
-    return `<span class="pc${isMe?' me':''}${P.left?' left':''}" style="--pc:${colorOf(V,p)}"><i></i><span class="nm">${esc(isMe?'あなた':P.name)}</span>${vs?`<span class="sc">${P.score}</span>`:''}</span>`;
+    const si=V.mode==='coop'?V.orders.findIndex(o=>o.id===(isMe?UI.sel:P.focus)):-1;
+    return `<span class="pc${isMe?' me':''}${P.left?' left':''}" style="--pc:${colorOf(V,p)}"><i></i><span class="nm">${esc(isMe?'あなた':P.name)}</span>${vs?`<span class="sc">${P.score}</span>`:''}${si>=0?`<span class="sel">→${si+1}</span>`:''}</span>`;
   }).join('');
 }
 function renderRot(V){

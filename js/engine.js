@@ -77,9 +77,9 @@ export function owners(S){
 }
 
 /* ---------- 生成 ---------- */
-// 客（注文）ごとに鍋を持つ。協力・ソロは客ごとに1つ（全員で共有）、対戦は客ごと×プレイヤーごと
+// 客（注文）ごと×プレイヤーごとに鍋を持つ。自分が選んだ客の「自分の鍋」に入れる。仲間の鍋の中身は伝票に並んで見える
 const blankPot=()=>({items:[],cat:null,heat:0,state:'idle',t:0,dur:0,res:null,fail:null,mid:null,taps:0,burn:0,by:{},rb:null});
-const potKey=(S,pid)=>S.mode==='versus'?pid:'*';
+const potKey=(S,pid)=>pid;
 export function potOf(S,o,pid){const k=potKey(S,pid);return o.pots[k]||(o.pots[k]=blankPot());}
 export const peekPot=(S,o,pid)=>o&&o.pots[potKey(S,pid)]||null;
 function resetPot(p){Object.assign(p,blankPot());}
@@ -122,8 +122,8 @@ export function createGame(cfg){
 export function begin(S){S.running=true;spawnOrder(S);spawnOrder(S);}
 
 function emit(S,to,e){S.ev.push(Object.assign({to},e));}
-// 鍋に関わる人へ（共有鍋なら全員、対戦なら持ち主）
-function emitPot(S,key,e){emit(S,key==='*'?'*':key,e);}
+// 鍋の持ち主へ
+function emitPot(S,key,e){emit(S,key,e);}
 export function isLocked(S,pid,k){
   if(S.so.on&&S.so.locked.includes(k))return true;
   const P=S.players[pid];return !!(P&&P.fx.lock[k]>S.elapsed);
@@ -267,7 +267,7 @@ function finishPot(S,o,key,p){
   const why=it.via&&x.main===it.t?`製法が違う（${it.proc}で作る）`:`正解：${T.n} = ${fmt(T.f)}`;
   mistake(S,o,key,p,x.main,fOf(x.main),why,x.id);
 }
-function creditOf(S,key,p){return key!=='*'?key:(p.rb&&S.players[p.rb]?p.rb:S.order[0]);}
+function creditOf(S,key,p){return S.players[key]?key:S.order[0];}
 function autoServe(S,o,key,p,overList,rx){
   const vs=S.mode==='versus',pid=creditOf(S,key,p),P=S.players[pid],R=RU(S),T=R.tgt(o.k);
   const C=vs?P:S.team,contrib=Object.keys(p.by);
@@ -288,7 +288,7 @@ function autoServe(S,o,key,p,overList,rx){
   emit(S,pid,{h:`提供 +${pts}${mult>1?`（チップ×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'});
   S.order.filter(q=>q!==pid).forEach(q=>{
     if(vs){const mine=o.pots[q];emit(S,q,{h:`<b>${P.name}</b> に取られた +${pts}${tail}`,k:'ng',s:mine&&mine.items.length?'snipe':'pop'});}
-    else emit(S,q,{h:`<b>${P.name}</b> +${pts}${mult>1?`（×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'});
+    else{const mine=o.pots[q];emit(S,q,{h:`<b>${P.name}</b> +${pts}${mult>1?`（×${mult}）`:''}${extra}${tail}${mine&&mine.items.length?'<small>この客は仲間が提供した</small>':''}`,k:'ok',s:'ok'});}
   });
   if(vs)sendAttack(S,P,attackPower(S,o.k,o.vip,P.combo,S.rush));
 }

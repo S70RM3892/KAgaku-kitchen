@@ -76,8 +76,10 @@ function force(S,key){if(!S.orders.length)tick(S,0.01);const o=S.orders[0];o.k=k
   apply(S,a,{t:'add',s:'@MnO2',o:o.id});assert.equal(S.reqs.length,1);
   const other=S.orders.find(x=>x!==o);
   apply(S,b,{t:'add',s:'@MnO2',o:other?other.id:o.id});
-  assert.equal(potOf(S,o,a).cat,'MnO2','request lands in requester-selected pot');assert.equal(potOf(S,o,b),potOf(S,o,a),'shared pot');
-  S.ev=[];apply(S,b,{t:'react',o:o.id});settle(S,o,b);
+  assert.equal(potOf(S,o,a).cat,'MnO2','request lands in requester-selected pot');
+  assert.notEqual(potOf(S,o,b),potOf(S,o,a),'each player has an own pot per customer');
+  assert.equal(potOf(S,o,b).items.length,0,"b's own pot untouched");
+  S.ev=[];apply(S,a,{t:'react',o:o.id});settle(S,o,a);
   assert.ok(!S.orders.includes(o));
   assert.deepEqual(S.ev.filter(e=>e.m&&e.m[1]==='ok').map(e=>e.to).sort(),['p0','p1']);
   const r0=owners(S)['H2O2'];S.rotNext=S.elapsed+0.01;tick(S,0.05);assert.notEqual(owners(S)['H2O2'],r0);
@@ -153,7 +155,9 @@ function cookA(S,pid,o,id){for(const [s,c] of comp(id))for(let i=0;i<c;i++)apply
   const o=force(S,'H2O');
   apply(S,own.O,{t:'add',s:'H',o:o.id});apply(S,own.O,{t:'add',s:'H',o:o.id});assert.equal(S.reqs.length,2);
   apply(S,own.H,{t:'add',s:'H',o:o.id});apply(S,own.H,{t:'add',s:'H',o:o.id});
-  assert.deepEqual(potOf(S,o,'p0').items,[['H',2,0]]);
+  assert.deepEqual(potOf(S,o,own.O).items,[['H',2,0]],'requested H went to the requester pot');
+  // 自分の担当の元素は自分の鍋へ（リクエストを消化したあと）
+  apply(S,own.H,{t:'add',s:'H',o:o.id});assert.deepEqual(potOf(S,o,own.H).items,[['H',1,0]]);
   console.log('atom coop ok');
 }
 for(const mode of ['solo','versus'])for(const st of ['s1','s5']){
