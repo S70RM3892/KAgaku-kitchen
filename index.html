@@ -6,6 +6,11 @@
 <title>ケミカル・キッチン</title>
 <meta name="description" content="反応式を組む「反応式モード」と、元素から分子式を組む「組成モード」で遊べる化学クッキングゲーム。友達と協力・対戦もできる。">
 <meta name="theme-color" content="#16323d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
@@ -16,7 +21,7 @@
 
   <!-- タイトル -->
   <section id="title" class="screen on" aria-label="タイトル">
-    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。遊び方は2つから選べる。</small></h1>
+    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。遊び方は2つから選べる。<span class="land">📱↔ ゲーム中は<b>横画面</b>で遊ぶ</span></small></h1>
     <div class="seg gsel" id="titleGame" role="group" aria-label="ゲームモード">
       <button data-g="rx">反応式モード<small>試薬・触媒・加熱で反応を組む</small></button>
       <button data-g="atom">組成モード<small>周期表の元素で分子式を組む</small></button>
@@ -43,6 +48,7 @@
       <button class="btn sub" id="btnHow">遊び方</button>
       <button class="btn sub" id="btnMute">音: ON</button>
       <button class="btn sub" id="btnCoef">係数判定: OFF</button>
+      <button class="btn sub" data-fs>⛶ 全画面・横向き</button>
     </div>
     <div class="howto" id="howto"></div>
   </section>
@@ -89,8 +95,10 @@
   <section id="game" class="screen" aria-label="ゲーム">
     <div class="hud">
       <button class="icon" id="btnPause" aria-label="一時停止">II</button>
+      <button class="icon fsb" data-fs aria-label="全画面・横向き">⛶</button>
       <div class="pill time" id="hudTime">2:30</div>
       <div class="stage-tag" id="hudStage"></div>
+      <span class="rot hudrot" id="hudRot" style="display:none"></span>
       <div class="incoming" id="incoming"></div>
       <div class="pill score"><span class="combo" id="hudCombo"></span><span id="hudScore">0</span></div>
     </div>
@@ -105,6 +113,12 @@
     <div class="stamps" id="stamps"></div>
     <div class="feed" id="feed"></div>
     <div class="count" id="count"></div>
+    <div id="rotate" role="dialog" aria-label="横向きにしてください">
+      <div class="rot-ico">📱↻</div>
+      <b>スマホを横向きにして遊ぶ</b>
+      <p>周期表（18族×7周期）や試薬棚を全部並べるため、ゲーム中は横画面用のレイアウト。</p>
+      <div class="row-btns"><button class="btn go" data-fs>⛶ 全画面で横向きにする</button><button class="btn sub" id="btnPortrait">縦のまま遊ぶ</button></div>
+    </div>
   </section>
 
   <!-- 図鑑 -->

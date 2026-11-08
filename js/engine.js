@@ -14,7 +14,8 @@ export const fxName=p=>FX_NAME[Math.min(4,Math.max(1,p))];
 
 /* ---------- ルールセット：反応式モード(rx)／組成モード(atom) ---------- */
 // 協力・対戦・通信の仕組みは共通で、棚・判定・得点だけをモードごとに切り替える
-const AEL={};A.MAIN.forEach(r=>r.forEach((s,c)=>{if(s)AEL[s]=c;}));A.DROW.forEach((s,c)=>{AEL[s]=c;});
+// 組成モードの棚は本物の周期表（18族）。協力の担当は族ごと（2人なら奇数族と偶数族）
+const AEL={};A.PT.forEach(e=>{AEL[e.s]=e.g-1;});
 const has=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);
 export const costOf=k=>MCOST[k]||3;
 export function orderLife(k,mode){
@@ -42,7 +43,7 @@ export const RULES={
     life:(k,m)=>Math.min(80,Math.max(28,26+A.BYID[k].atoms*1.6+(m==='prop'?8:0))),
     power:k=>Math.floor(A.BYID[k].atoms/6),
     lockPool:k=>Object.keys(A.BYID[k].m),lockSkip:['H','O','C'],lockFill:()=>['N','S','Cl','Na','K','Ca'],
-    maxCoef:40,maxSpecies:12,label:k=>k,dark:'停電！ 位置で元素を探せ',rot:'担当の元素が入れ替わった',
+    maxCoef:40,maxSpecies:12,label:k=>k,dark:'停電！ 周期表の位置で元素を探せ',rot:'担当の族が入れ替わった',
   },
 };
 export const GAMES={rx:'反応式モード',atom:'組成モード'};

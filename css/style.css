@@ -410,3 +410,104 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--ticket);outline
 .busybox{background:#0003;border-radius:14px;padding:8px 10px 6px}
 .busy-h{font-family:var(--font-display);color:var(--ticket);font-size:15px;margin-bottom:6px}
 .busydesc{margin-top:5px;min-height:1.5em}
+
+/* =================== 本物の周期表（組成モード） =================== */
+.ptable.pt{grid-template-columns:14px repeat(18,minmax(0,1fr));grid-template-rows:12px repeat(7,minmax(0,1fr));gap:2px;padding:4px}
+.ptable.pt .glab,.ptable.pt .plab,.ptable.pt .pt-corner{font-size:9px;color:#7fa3ad;text-align:center;font-weight:800;line-height:12px;align-self:center}
+.ptable.pt .pt-corner{font-size:8px}
+.ptable.pt .cell{border-width:1.5px;border-radius:5px;min-height:0}
+.ptable.pt .cell .sym{font-size:clamp(10px,1.55vw,17px)}
+.ptable.pt .cell .z{font-size:clamp(6px,0.75vw,9px);top:0;left:2px}
+.ptable.pt .cell.ph{cursor:default;opacity:.75}
+.ptable.pt .cell.ph .sym{font-size:clamp(7px,0.9vw,11px)}
+.ptable.pt .cell.locked::after{font-size:7px}
+.c-f{background:#d1c4e9}
+.pt-info{display:flex;align-items:center;justify-content:center;gap:4px;font-size:clamp(10px,1.3vw,14px);font-weight:800;color:#d6e6ea;background:#ffffff0d;border-radius:6px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-info b{color:var(--ticket);font-family:var(--font-display);font-weight:400;font-size:1.15em}
+.pt-info i,.pt-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;border:1px solid var(--ink);vertical-align:middle;margin-right:3px}
+.pt-legend{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px 8px;font-size:clamp(8px,1vw,11px);font-weight:800;color:#9fc0c9;padding:0 4px;overflow:hidden}
+.pt-legend span{white-space:nowrap}
+.shelf-cap.info{color:var(--ticket);font-size:11px}
+.logo .land{display:block;margin-top:4px;font-size:12px;color:var(--cool)}
+
+/* 縦画面のときの「横にして」案内 */
+#rotate{display:none;position:absolute;inset:0;z-index:70;background:#081419ee;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;text-align:center;padding:24px}
+#rotate .rot-ico{font-size:56px;animation:bob .8s infinite alternate}
+#rotate b{font-family:var(--font-display);font-weight:400;font-size:22px;color:var(--ticket)}
+#rotate p{margin:0;font-size:13px;line-height:1.6;color:#cfe3e8;max-width:320px}
+@media (orientation:portrait){body:not(.allow-portrait) #game.on #rotate{display:flex}}
+.hud .fsb{font-size:15px}
+
+/* =================== 横画面レイアウト =================== */
+@media (orientation:landscape) and (min-width:560px){
+  #app{max-width:none}
+  .screen:not(#game){left:50%;right:auto;width:min(100%,700px);transform:translateX(-50%)}
+  #game.screen.on{display:grid}
+  #game{--side:clamp(200px,27vw,330px);grid-template-columns:var(--side) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:"hud orders" "mp orders" "flasks table";gap:6px 8px;
+    padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
+  #game .hud{grid-area:hud;flex-wrap:wrap;gap:5px;align-content:flex-start}
+  #game .hud .stage-tag{order:9;flex:1 0 100%;max-width:none}
+  #game .hud .time{min-width:58px;font-size:18px}
+  #game .hud .score{flex:1;font-size:14px}
+  #game .hud .icon{width:32px;height:30px}
+  #game .incoming{order:10;flex:1 0 100%}
+  #game .mpbar{grid-area:mp;flex-wrap:nowrap;align-items:flex-start;min-height:0;gap:4px}
+  #game .mpbar .who{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;flex:1}
+  #game .mpbar .pc{min-width:0;padding:1px 6px 1px 3px;font-size:10px}
+  #game .mpbar .pc .nm{max-width:none;flex:1;min-width:0}
+  #game .mpbar .rot{display:none}
+  #game .mpbar .stampbtn{height:24px;padding:0 6px}
+  #game .orders,#game .orders.three{grid-area:orders;grid-template-columns:repeat(var(--cols,4),minmax(0,1fr));grid-template-rows:auto;align-self:start}
+  #game .ticket{min-height:66px}
+  #game .orders.three .clue{font-size:11px}
+  #game .flasks{grid-area:flasks;grid-template-columns:minmax(0,1fr)!important;grid-auto-rows:minmax(0,1fr);min-height:0;align-content:stretch}
+  #game .flasks.four{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #game .flask{min-height:0;overflow:hidden;padding:4px 6px}
+  #game .flask .f-body{min-height:0;overflow:hidden}
+  #game .flask .product{font-size:17px}
+  #game .flasks.three .f-btns button,#game .flasks.four .f-btns button{font-size:12px}
+  #game .ptable{grid-area:table;min-height:0}
+  #game .feed{top:4px;left:calc(50% + var(--side)/2)}
+  #game .stamps{top:auto;bottom:10px;left:10px;right:auto}
+  .overlay .panel{max-width:680px}
+}
+/* 低い横画面（スマホ） */
+@media (orientation:landscape) and (max-height:430px){
+  #game .ticket{min-height:58px;padding:3px 6px 9px}
+  #game .clue.name{font-size:15px}
+  #game .t-top .face{font-size:15px}
+  #game .flask .f-head{font-size:10px}
+  #game .f-btns button{padding:3px 2px}
+  #game .flask .eq{font-size:8.5px}
+  .ptable.rx{grid-template-rows:11px repeat(6,minmax(0,1fr)) 12px minmax(0,1fr);gap:2px;padding:4px}
+  .shelf-cap{font-size:8.5px;line-height:11px}
+}
+
+/* 伝票の見出しを1行に収める */
+.t-top{flex-wrap:nowrap;overflow:hidden;min-width:0}
+.t-top .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.t-top .hint{white-space:nowrap;flex:0 0 auto}
+@media (orientation:landscape) and (max-width:900px){
+  #game .t-top .tag:not(.vip):not(.step){display:none}
+  #game .t-top .hint{font-size:10px;padding:0 4px}
+}
+
+.hud .hudrot{display:none!important}
+@media (orientation:landscape) and (min-width:560px){
+  #game .hud .hudrot{order:8;font-size:10px;padding:2px 7px}
+  #game .hud .hudrot[style=""]{display:inline-block!important}
+}
+@media (orientation:landscape) and (min-width:560px){
+  #game .flask{gap:3px}
+  #game .flask .f-body{min-height:22px;flex:1 1 22px}
+  #game .flask .f-btns{flex:0 0 auto}
+  #game .flask .f-btns button{padding:3px 2px}
+  #game .flask .chip{font-size:12px;padding:0 4px}
+}
+.flask .f-head,.flask .f-bar{flex:0 0 auto}
+@media (orientation:landscape) and (max-height:430px){
+  #game .flasks.three{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #game .flasks.three .flask:last-child{grid-column:1 / -1}
+  #game .flask .f-bar{height:4px}
+}

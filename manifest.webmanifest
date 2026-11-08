@@ -1,0 +1,12 @@
+{
+  "name": "ケミカル・キッチン",
+  "short_name": "ケミキッチン",
+  "description": "反応式と周期表で遊ぶ化学クッキングゲーム",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#16323d",
+  "theme_color": "#16323d",
+  "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}

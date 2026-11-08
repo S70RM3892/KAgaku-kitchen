@@ -1,22 +1,47 @@
 // 組成モードのデータ：元素・物質・ステージ（元素を組み合わせて分子式を作るモード）
-const MAIN=[
- ['H',null,null,null,null,null,null,'He'],
- ['Li','Be','B','C','N','O','F','Ne'],
- ['Na','Mg','Al','Si','P','S','Cl','Ar'],
- ['K','Ca','Ga','Ge','As','Se','Br','Kr'],
- ['Rb','Sr','In','Sn','Sb','Te','I','Xe'],
- ['Cs','Ba','Tl','Pb','Bi','Po','At','Rn']];
+/* ================= 周期表（18族×7周期） ================= */
+// '*La' '*Ac' はランタノイド・アクチノイドの欄（タップ不可）
+const PT_ROWS=[
+ ['H',null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,'He'],
+ ['Li','Be',null,null,null,null,null,null,null,null,null,null,'B','C','N','O','F','Ne'],
+ ['Na','Mg',null,null,null,null,null,null,null,null,null,null,'Al','Si','P','S','Cl','Ar'],
+ ['K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr'],
+ ['Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe'],
+ ['Cs','Ba','*La','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn'],
+ ['Fr','Ra','*Ac','Rf','Db','Sg','Bh','Hs','Mt','Ds','Rg','Cn','Nh','Fl','Mc','Lv','Ts','Og'],
+];
+const ELNAME={H:'水素',He:'ヘリウム',Li:'リチウム',Be:'ベリリウム',B:'ホウ素',C:'炭素',N:'窒素',O:'酸素',F:'フッ素',Ne:'ネオン',
+ Na:'ナトリウム',Mg:'マグネシウム',Al:'アルミニウム',Si:'ケイ素',P:'リン',S:'硫黄',Cl:'塩素',Ar:'アルゴン',
+ K:'カリウム',Ca:'カルシウム',Sc:'スカンジウム',Ti:'チタン',V:'バナジウム',Cr:'クロム',Mn:'マンガン',Fe:'鉄',Co:'コバルト',Ni:'ニッケル',Cu:'銅',Zn:'亜鉛',
+ Ga:'ガリウム',Ge:'ゲルマニウム',As:'ヒ素',Se:'セレン',Br:'臭素',Kr:'クリプトン',
+ Rb:'ルビジウム',Sr:'ストロンチウム',Y:'イットリウム',Zr:'ジルコニウム',Nb:'ニオブ',Mo:'モリブデン',Tc:'テクネチウム',Ru:'ルテニウム',Rh:'ロジウム',Pd:'パラジウム',Ag:'銀',Cd:'カドミウム',
+ In:'インジウム',Sn:'スズ',Sb:'アンチモン',Te:'テルル',I:'ヨウ素',Xe:'キセノン',
+ Cs:'セシウム',Ba:'バリウム',Hf:'ハフニウム',Ta:'タンタル',W:'タングステン',Re:'レニウム',Os:'オスミウム',Ir:'イリジウム',Pt:'白金',Au:'金',Hg:'水銀',
+ Tl:'タリウム',Pb:'鉛',Bi:'ビスマス',Po:'ポロニウム',At:'アスタチン',Rn:'ラドン',
+ Fr:'フランシウム',Ra:'ラジウム',Rf:'ラザホージウム',Db:'ドブニウム',Sg:'シーボーギウム',Bh:'ボーリウム',Hs:'ハッシウム',Mt:'マイトネリウム',Ds:'ダームスタチウム',Rg:'レントゲニウム',Cn:'コペルニシウム',
+ Nh:'ニホニウム',Fl:'フレロビウム',Mc:'モスコビウム',Lv:'リバモリウム',Ts:'テネシン',Og:'オガネソン'};
+const CATJP={alk:'アルカリ金属',ae:'アルカリ土類金属',tm:'遷移元素',pm:'典型金属',md:'半金属',nm:'非金属',hal:'ハロゲン',ng:'貴ガス',f:'ランタノイド・アクチノイド'};
+// PT: {s,z,p(周期),g(族),c(分類)}。原子番号はランタノイド・アクチノイドの15個ずつを飛ばして数える
+const PT=[],ZN={},CAT={},POS={};
+{
+  let z=0;
+  PT_ROWS.forEach((row,p)=>row.forEach((s,g)=>{
+    if(!s)return;
+    if(s[0]==='*'){z++;POS[s]={p:p+1,g:g+1,z0:z,z1:z+14};z+=14;return;}
+    z++;
+    let c;
+    if(s==='H')c='nm';
+    else if(g===0)c='alk';else if(g===1)c='ae';else if(g>=2&&g<=11)c='tm';
+    else if(g===16)c='hal';else if(g===17)c='ng';
+    else if('B Si Ge As Sb Te'.split(' ').includes(s))c='md';
+    else if('C N O P S Se'.split(' ').includes(s))c='nm';
+    else c='pm';
+    PT.push({s,z,p:p+1,g:g+1,c});ZN[s]=z;CAT[s]=c;POS[s]={p:p+1,g:g+1};
+  }));
+}
+// 旧レイアウト（縦画面用の圧縮周期表）互換
+const MAIN=PT_ROWS.slice(0,6).map(r=>[r[0],r[1],r[12],r[13],r[14],r[15],r[16],r[17]]);
 const DROW=['Cr','Mn','Fe','Co','Ni','Cu','Zn','Ag'];
-const ZN={H:1,He:2,Li:3,Be:4,B:5,C:6,N:7,O:8,F:9,Ne:10,Na:11,Mg:12,Al:13,Si:14,P:15,S:16,Cl:17,Ar:18,K:19,Ca:20,Cr:24,Mn:25,Fe:26,Co:27,Ni:28,Cu:29,Zn:30,Ga:31,Ge:32,As:33,Se:34,Br:35,Kr:36,Rb:37,Sr:38,Ag:47,In:49,Sn:50,Sb:51,Te:52,I:53,Xe:54,Cs:55,Ba:56,Tl:81,Pb:82,Bi:83,Po:84,At:85,Rn:86};
-const CAT={};
-'Li Na K Rb Cs'.split(' ').forEach(s=>CAT[s]='alk');
-'Be Mg Ca Sr Ba'.split(' ').forEach(s=>CAT[s]='ae');
-DROW.forEach(s=>CAT[s]='tm');
-'Al Ga In Sn Tl Pb Bi Po'.split(' ').forEach(s=>CAT[s]='pm');
-'B Si Ge As Sb Te'.split(' ').forEach(s=>CAT[s]='md');
-'H C N O P S Se'.split(' ').forEach(s=>CAT[s]='nm');
-'F Cl Br I At'.split(' ').forEach(s=>CAT[s]='hal');
-'He Ne Ar Kr Xe Rn'.split(' ').forEach(s=>CAT[s]='ng');
 
 // [表示式, 名前, 分類, [性質ヒント...]]
 const RAW=[
@@ -157,4 +182,4 @@ const STAGES=[
 ];
 const REVIEW={id:'rv',name:'苦手克服ラン',desc:'習熟度の低い物質だけを集中注文',pool:'review',clue:'mix',flasks:3,time:120,spawn:12,max:4,life:1.1,stars:null};
 
-export {MAIN,DROW,ZN,CAT,RAW,CATNAME,parseFormula,keyOf,atomCount,hill,fmt,DB,BYKEY,BYID,STAGES,REVIEW};
+export {PT,PT_ROWS,POS,ELNAME,CATJP,MAIN,DROW,ZN,CAT,RAW,CATNAME,parseFormula,keyOf,atomCount,hill,fmt,DB,BYKEY,BYID,STAGES,REVIEW};

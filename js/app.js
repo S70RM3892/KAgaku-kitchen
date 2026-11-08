@@ -170,7 +170,7 @@ const HOWTO={
   rx:`<b>反応式モード</b>：試薬・<b>触媒</b>・<b>加熱の有無</b>を選んで反応式を組む。MnO₂や濃硫酸は「触媒のとき」と「反応物のとき」があるので要注意。工業的製法は製法名つきで注文される。<br>
       <b>覚え方の仕組み</b>：間違えた・時間切れの反応は結果画面に反応式と条件が出て、次からよく注文される（協力・対戦でも全員の苦手を反映）。ヒント・余計な加熱/触媒では習熟★は上がらない。<br>
       <b>係数判定</b>：ONにすると係数まで合わせないと反応しない（京大ラッシュは常にON）。`,
-  atom:`<b>組成モード</b>：周期表の棚から元素を選んで、注文の物質の<b>分子式</b>を組み立てる。注文は名前か「性質」で来る。<br>
+  atom:`<b>組成モード</b>：本物の周期表（1〜18族×第1〜7周期）から元素を選んで、注文の物質の<b>分子式</b>を組み立てる。タップした元素の名前・周期・族も表示されるので、周期表の位置ごと覚えられる。<br>
       <b>覚え方の仕組み</b>：間違えた・時間切れの物質は答えが表示され、次からよく注文される。ヒントを使うと報酬は減り、習熟（★）は上がらない。★5で習得。<br>
       <b>判定は分子式（組成式）</b>：C₂H₆O ならエタノールでもジメチルエーテルでも同じ扱い。`
 };
@@ -230,12 +230,12 @@ function tutorial(fromGame,g=SAVE.g){
 
 function tutorialA(fromGame){
   overlay(`<h2>遊び方（組成モード）</h2><div class="tut">
-    <div class="step"><span class="n">1</span><div><b>周期表をタップ</b>して、黄色い枠のフラスコに原子を入れる。長押しで連続投入。チップをタップで1個戻す。</div></div>
+    <div class="step"><span class="n">1</span><div><b>周期表（1〜18族×第1〜7周期）をタップ</b>して、黄色い枠のフラスコに原子を入れる。長押しで連続投入。チップをタップで1個戻す。タップした元素の<b>名前・周期・族・分類</b>が表の上に出る。</div></div>
     <div class="step"><span class="n">2</span><div><b>「加熱」</b>で反応開始。レシピに無い組成だと<b>失敗作</b>になる。</div></div>
     <div class="step"><span class="n">3</span><div>完成したフラスコをタップして持ち、<b>届けたい注文の伝票をタップ</b>。早いほどチップが増え、連続成功でチップ倍率が最大×4。</div></div>
-    <div class="step"><span class="n">4</span><div>完成品を放置すると<b>燃える</b>。燃えたフラスコは連打で消火。</div></div>
+    <div class="step"><span class="n">4</span><div>完成品を放置すると<b>燃える</b>。燃えたフラスコは連打で消火。停電中は元素記号が消えるので<b>位置</b>で探す。</div></div>
     <div class="step"><span class="n">5</span><div>伝票の「ヒント」で元素→化学式の順に表示。ただし報酬が減り、習熟★は上がらない。</div></div>
-    <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は周期表の分担とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
+    <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は族ごとの分担（2人なら奇数族と偶数族）とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
   </div><button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開店する':'わかった'}</button>`);
 }
 
@@ -577,7 +577,7 @@ const RULES={
 };
 const RULES_A={
   coop:`<b>協力のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
-    <li><b>棚の分担</b>：周期表の列ごとに担当が決まる（2人なら1・13・15・17族 と 2・14・16・18族）。HとOは必ず別担当なので、水・酸・有機物は連携しないと作れない。</li>
+    <li><b>棚の分担</b>：周期表の族ごとに担当が決まる（2人なら奇数族と偶数族）。H（1族）とO（16族）は必ず別担当なので、水・酸・有機物は連携しないと作れない。</li>
     <li>担当外の元素をタップすると担当者に<b>リクエスト</b>。相手がタップすると<b>あなたのフラスコ</b>に入る。</li>
     <li>フラスコ・注文・得点は全員で共有。<b>40秒ごとに棚替え</b>。2人以上で原子を入れたフラスコは<b>連携ボーナス×1.2</b>。</li>
     <li>フラスコを持たずに伝票をタップすると「担当宣言」。💬でスタンプ。</li></ul>`,
@@ -768,7 +768,7 @@ function hintHTML(V,key,level,mode){
 function renderOrders(V){
   if(V.g==='atom')return renderOrdersA(V);
   const slots=Math.max(4,V.max),three=slots>4;
-  const box=$('orders');box.classList.toggle('three',three);
+  const box=$('orders');box.classList.toggle('three',three);box.style.setProperty('--slots',slots);setOrderCols(box,slots);
   let h='';
   for(let k=0;k<slots;k++){
     const o=V.orders[k];const it=o&&MENU[o.k];
@@ -794,7 +794,7 @@ function renderOrders(V){
 }
 function renderOrdersA(V){
   const slots=Math.max(4,V.max),three=slots>4;
-  const box=$('orders');box.classList.toggle('three',three);
+  const box=$('orders');box.classList.toggle('three',three);box.style.setProperty('--slots',slots);setOrderCols(box,slots);
   let h='';
   for(let k=0;k<slots;k++){
     const o=V.orders[k];const d=o&&A.BYID[o.k];
@@ -907,20 +907,20 @@ function symHTML(lab){
 }
 function buildTable(g){
   const T=$('ptable');T.classList.toggle('rx',g!=='atom');
+  T.classList.toggle('pt',g==='atom');
   if(g==='atom'){
-    let h='';
-    ['1','2','13','14','15','16','17','18'].forEach(x=>h+=`<div class="glab">${x}</div>`);
-    A.MAIN.forEach((row,r)=>{
-      row.forEach((s,c)=>{
-        if(r===0&&c===1){h+=`<div class="gap-note">周期表の棚（典型元素）／下段は遷移元素</div>`;return;}
-        if(r===0&&c>1&&c<7)return;
-        if(!s)return;
-        h+=cellHTMLA(s);
-      });
-    });
-    h+=`<div class="dsep"></div>`;
-    A.DROW.forEach(s=>h+=cellHTMLA(s));
-    T.innerHTML=h;T.classList.remove('dark');return;
+    // 本物の周期表：1〜18族 × 第1〜7周期（ランタノイド・アクチノイドは1マスにまとめる）
+    let h='<div class="pt-corner" style="grid-column:1;grid-row:1">族</div>';
+    for(let gr=1;gr<=18;gr++)h+=`<div class="glab" style="grid-column:${gr+1};grid-row:1">${gr}</div>`;
+    for(let p=1;p<=7;p++)h+=`<div class="plab" style="grid-column:1;grid-row:${p+1}">${p}</div>`;
+    A.PT.forEach(e=>{h+=cellHTMLA(e);});
+    for(const k of ['*La','*Ac']){
+      const P=A.POS[k],nm=k==='*La'?'ランタノイド':'アクチノイド';
+      h+=`<div class="cell c-f ph" style="grid-column:${P.g+1};grid-row:${P.p+1}" title="${nm}（${P.z0}〜${P.z1}）"><span class="z">${P.z0}-</span><span class="sym">${k==='*La'?'La-Lu':'Ac-Lr'}</span></div>`;
+    }
+    h+=`<div class="pt-info" id="ptInfo" style="grid-column:3 / 19;grid-row:2">元素をタップすると、名前・周期・族・分類がここに出る</div>`;
+    h+=`<div class="pt-legend" style="grid-column:4 / 14;grid-row:3 / 5">${Object.entries(A.CATJP).map(([k,v])=>`<span><i class="c-${k}"></i>${v}</span>`).join('')}</div>`;
+    T.innerHTML=h;T.classList.remove('dark');requestAnimationFrame(fitTable);return;
   }
   let h=`<div class="shelf-cap">試薬棚：タップでフラスコへ／もう一度で係数+1</div>`;
   SHELF.forEach(row=>row.forEach(id=>{h+=cellHTML(id);}));
@@ -928,7 +928,36 @@ function buildTable(g){
   CATS.forEach(c=>{h+=cellHTML('@'+c);});
   $('ptable').innerHTML=h;$('ptable').classList.remove('dark');
 }
-function cellHTMLA(s){return `<button class="cell c-${A.CAT[s]}" data-el="${s}" aria-label="${s}"><span class="z">${A.ZN[s]}</span><span class="sym">${s}</span><span class="bd"></span></button>`;}
+function cellHTMLA(e){return `<button class="cell c-${e.c}" data-el="${e.s}" style="grid-column:${e.g+1};grid-row:${e.p+1}" aria-label="${e.s} ${A.ELNAME[e.s]||''}"><span class="z">${e.z}</span><span class="sym">${e.s}</span><span class="bd"></span></button>`;}
+// 横画面で伝票が細くなりすぎるときは2段に折り返す
+function setOrderCols(box,slots){
+  const W=box.clientWidth||600;
+  box.style.setProperty('--cols',W/slots>=112?slots:Math.ceil(slots/2));
+}
+window.addEventListener('resize',()=>{const b=$('orders');if(b)setOrderCols(b,+getComputedStyle(b).getPropertyValue('--slots')||4);});
+// 周期表のマスが縦長になりすぎないよう、行の高さをマスの幅の1.5倍までにする
+function fitTable(){
+  const T=$('ptable');if(!T)return;
+  if(!T.classList.contains('pt')){T.style.gridTemplateRows='';T.style.alignContent='';return;}
+  T.style.gridTemplateRows='';
+  const w=T.clientWidth-8,h=T.clientHeight-8;if(w<=0||h<=0)return;
+  const rh=Math.max(18,Math.min((h-12-14)/7,(w-14-36)/18*1.5));
+  T.style.gridTemplateRows=`12px repeat(7,${Math.floor(rh)}px)`;T.style.alignContent='center';
+}
+window.addEventListener('resize',()=>requestAnimationFrame(fitTable));
+window.addEventListener('orientationchange',()=>setTimeout(fitTable,300));
+// タップした元素・試薬の情報を表示（覚えるための手がかり）
+let infoT=0;
+function showInfo(g,k){
+  if(g==='atom'){
+    const el=$('ptInfo'),e=A.PT.find(x=>x.s===k);if(!el||!e)return;
+    el.innerHTML=`<b>${e.z} ${esc(e.s)}</b> ${esc(A.ELNAME[e.s]||'')}　第${e.p}周期・${e.g}族　<i class="c-${e.c}"></i>${esc(A.CATJP[e.c])}${e.g>=3&&e.g<=12?'':'（典型元素）'}`;
+    return;
+  }
+  const cap=document.querySelector('#ptable .shelf-cap');if(!cap)return;
+  cap.textContent=`${cellLabel(k).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[d])}：${cellName(k)}`;cap.classList.add('info');
+  clearTimeout(infoT);infoT=setTimeout(()=>{cap.textContent='試薬棚：タップでフラスコへ／もう一度で係数+1';cap.classList.remove('info');},1800);
+}
 function cellHTML(key){
   const y=symHTML(cellLabel(key));
   const kind=key[0]==='@'?'cat':(SUB[key].k||'salt');
@@ -944,7 +973,7 @@ function renderCells(V){
   const own=E.owners(V),M=me();
   const to={},from={};
   V.reqs.forEach(r=>{if(r.to===M)(to[r.s]=to[r.s]||[]).push(r);if(r.from===M)from[r.s]=(from[r.s]||0)+1;});
-  $('ptable').querySelectorAll('.cell').forEach(c=>{
+  $('ptable').querySelectorAll('.cell[data-el]').forEach(c=>{
     const s=c.dataset.el,o=own&&own[s],nown=!!o&&o!==M;
     c.classList.toggle('nown',nown);if(nown)c.style.setProperty('--oc',colorOf(V,o));
     c.classList.toggle('locked',E.isLocked(V,M,s));
@@ -979,12 +1008,13 @@ function renderMP(V){
   }).join('');
 }
 function renderRot(V){
-  const el=$('mpRot');
-  if(!V.split||!E.owners(V)){if(el.textContent)el.textContent='';el.style.display='none';return;}
-  el.style.display='';
-  const s=Math.max(0,Math.ceil(V.rotNext-V.elapsed));
-  const t=`棚替え ${s}s`;if(el.textContent!==t)el.textContent=t;
-  el.classList.toggle('soon',s<=5&&V.running);
+  for(const el of [$('mpRot'),$('hudRot')]){
+    if(!V.split||!E.owners(V)){if(el.textContent)el.textContent='';el.style.display='none';continue;}
+    el.style.display='';
+    const s=Math.max(0,Math.ceil(V.rotNext-V.elapsed));
+    const t=`棚替え ${s}s`;if(el.textContent!==t)el.textContent=t;
+    el.classList.toggle('soon',s<=5&&V.running);
+  }
 }
 function renderIncoming(V){
   const el=$('incoming');
@@ -1032,7 +1062,7 @@ let holdT=0,holdIv=0;
 function stopHold(){clearTimeout(holdT);clearInterval(holdIv);holdT=holdIv=0;}
 const playable=V=>V&&V.running&&!V.paused&&!V.over;
 $('ptable').addEventListener('pointerdown',e=>{
-  const c=e.target.closest('.cell');const V=view();if(!c||!playable(V))return;
+  const c=e.target.closest('.cell[data-el]');const V=view();if(!c||!playable(V))return;
   e.preventDefault();
   const s=c.dataset.el;
   if(!tryAdd(s,c))return;
@@ -1057,6 +1087,7 @@ function tryAdd(s,cell){
     if(!x&&f.items.length>=RL.maxSpecies){toast(`${V.g==='atom'?'元素':'試薬'}は${RL.maxSpecies}種類まで`,'ng');return false;}
   }
   act({t:'add',s,f:f?f.id:null});
+  showInfo(V.g,s);
   sfx(req?'req':s[0]==='@'?'pop':'tap');
   if(cell){cell.classList.add('hit');setTimeout(()=>cell.classList.remove('hit'),80);}
   return s[0]!=='@';
@@ -1092,6 +1123,22 @@ $('orders').addEventListener('pointerdown',e=>{
   if(UI.held!=null){act({t:'serve',f:UI.held,o:id});UI.held=null;return;}
   if(V.mode==='coop'){act({t:'claim',o:id});sfx('tap');}
 });
+// 全画面＋横向き固定（対応ブラウザのみ。iPhoneのSafariは非対応なのでボタンを隠す）
+const fsOK=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);
+async function goLandscape(){
+  try{
+    const el=document.documentElement;
+    if(!(document.fullscreenElement||document.webkitFullscreenElement)){
+      if(el.requestFullscreen)await el.requestFullscreen({navigationUI:'hide'});else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
+      if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock('landscape').catch(()=>{});
+    }else{
+      if(document.exitFullscreen)await document.exitFullscreen();else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+    }
+  }catch(e){}
+}
+document.querySelectorAll('[data-fs]').forEach(b=>{b.style.display=fsOK?'':'none';b.addEventListener('click',()=>{audio();goLandscape();});});
+document.body.classList.toggle('allow-portrait',!!SAVE.portrait);
+$('btnPortrait').addEventListener('click',()=>{SAVE.portrait=true;persist();document.body.classList.add('allow-portrait');});
 $('btnPause').addEventListener('click',()=>{const V=view();if(V&&V.running&&!V.paused)act({t:'pause'});});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){const V=view();if(CUR==='game'&&V&&V.running&&!V.paused)act({t:'pause'});}
