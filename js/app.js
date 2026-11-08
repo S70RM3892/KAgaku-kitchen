@@ -9,7 +9,7 @@ const {COLORS,FL,STAMPS}=E;
 // モードごとに習熟度・ベストを分けて持つ。rx=反応式モード、atom=組成モード（旧版 v1 の記録を引き継ぐ）
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
-let SAVE={name:'',mute:false,tut:false,tutA:false,coef:false,g:'rx',vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,coef:false,g:'rx',busy:2,vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -25,6 +25,7 @@ try{
 for(const g of ['rx','atom']){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
 if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(SAVE.g!=='atom')SAVE.g='rx';
+SAVE.busy=Math.min(5,Math.max(1,(SAVE.busy|0)||2));
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
 const SV=g=>SAVE[g==='atom'?'atom':'rx'];
@@ -153,7 +154,18 @@ const colorOf=(V,pid)=>{const P=V&&V.players[pid];return COLORS[P?P.slot%4:0];};
 
 /* ================= タイトル ================= */
 function starsFor(st,score){if(!st.stars)return 0;return st.stars.filter(t=>score>=t).length;}
-function unlocked(i,g=SAVE.g){if(i===0)return true;const p=stagesOf(g)[i-1];return starsFor(p,SV(g).best[p.id]||0)>=1;}
+// 忙しさごとにベストを分けて記録（ふつうは従来どおりステージIDそのまま）
+const busyKey=(id,b)=>(b|0)===2||!b?id:`${id}@${b}`;
+const scaledStars=(st,b)=>st.stars?st.stars.map(x=>Math.round(x*E.busyOf(b).star/10)*10):null;
+function unlocked(i,g=SAVE.g){
+  if(i===0)return true;const p=stagesOf(g)[i-1];
+  for(let b=1;b<=5;b++)if(starsFor({stars:scaledStars(p,b)},SV(g).best[busyKey(p.id,b)]||0)>=1)return true;
+  return false;
+}
+function renderBusy(el,cur,disabled){
+  el.innerHTML=E.BUSY.slice(1).map((b,i)=>`<button data-b="${i+1}" class="${i+1===cur?'on':''}" ${disabled?'disabled':''}>${['☕','🔥','🔥🔥','🔥🔥🔥','∞'][i]}<small>${b.name}</small></button>`).join('');
+  const d=el.nextElementSibling;if(d&&d.classList.contains('busydesc'))d.textContent=E.busyOf(cur).desc;
+}
 const HOWTO={
   rx:`<b>反応式モード</b>：試薬・<b>触媒</b>・<b>加熱の有無</b>を選んで反応式を組む。MnO₂や濃硫酸は「触媒のとき」と「反応物のとき」があるので要注意。工業的製法は製法名つきで注文される。<br>
       <b>覚え方の仕組み</b>：間違えた・時間切れの反応は結果画面に反応式と条件が出て、次からよく注文される（協力・対戦でも全員の苦手を反映）。ヒント・余計な加熱/触媒では習熟★は上がらない。<br>
@@ -167,7 +179,7 @@ function renderTitle(){
   $('titleGame').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
   let h='';
   ST.forEach((st,i)=>{
-    const best=R.best[st.id]||0,s=starsFor(st,best),lock=!unlocked(i,g);
+    const best=R.best[busyKey(st.id,SAVE.busy)]||0,s=starsFor({stars:scaledStars(st,SAVE.busy)},best),lock=!unlocked(i,g);
     h+=`<button class="stage${lock?' locked':''}" data-stage="${i}">
       <div class="no">${lock?'🔒':i+1}</div>
       <div><h3>${esc(st.name)}</h3><p>${esc(st.desc)}${lock?'<br>前のステージで★1を取ると解放':''}</p></div>
@@ -176,8 +188,9 @@ function renderTitle(){
   const weak=reviewPool(g).length,unit=g==='atom'?'物質':'反応';
   h+=`<button class="stage review" data-stage="rv"><div class="no">復</div>
     <div><h3>${RV.name}</h3><p>${weak?`苦手候補 ${weak} ${unit}から集中注文。星なし・何度でも`:`一度でも注文された${unit}が出たら解放`}</p></div>
-    <div class="best">${R.best.rv?R.best.rv+'点':'—'}</div></button>`;
+    <div class="best">${R.best[busyKey('rv',SAVE.busy)]?R.best[busyKey('rv',SAVE.busy)]+'点':'—'}</div></button>`;
   $('stageList').innerHTML=h;
+  renderBusy($('titleBusy'),SAVE.busy,false);
   $('btnMute').textContent='音: '+(SAVE.mute?'OFF':'ON');
   $('btnCoef').textContent='係数判定: '+(SAVE.coef?'ON':'OFF');
   $('btnCoef').style.display=g==='rx'?'':'none';
@@ -185,6 +198,7 @@ function renderTitle(){
   $('howto').innerHTML=HOWTO[g];
   if(document.activeElement!==$('inName'))$('inName').value=SAVE.name||'';
 }
+$('titleBusy').addEventListener('click',e=>{const b=e.target.closest('[data-b]');if(!b)return;SAVE.busy=+b.dataset.b;persist();sfx('tap');renderTitle();});
 $('titleGame').addEventListener('click',e=>{const b=e.target.closest('[data-g]');if(!b)return;SAVE.g=b.dataset.g==='atom'?'atom':'rx';persist();sfx('tap');renderTitle();});
 $('stageList').addEventListener('click',e=>{
   const b=e.target.closest('.stage');if(!b)return;
@@ -287,7 +301,7 @@ function startSolo(stageId,g=SAVE.g){
   const st=E.stageById(g,stageId);
   let pool=null;
   if(st.pool==='review'){const p=reviewPool(g);pool=p.length?p:Object.keys(myWeights(g));}
-  const cfg={g,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
+  const cfg={g,busy:SAVE.busy,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
   if(!(g==='atom'?SAVE.tutA:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
@@ -351,7 +365,7 @@ function act(a){
 async function createRoom(){
   leaveSession(true);
   const ses={role:'host',me:'p0',pidN:0,code:'',players:[{id:'p0',name:myName(),slot:0,cid:null}],
-    cfg:{g:SAVE.g,mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:allWeights()},acks:{},q:{},S:null,inGame:false};
+    cfg:{g:SAVE.g,busy:SAVE.busy,mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:allWeights()},acks:{},q:{},S:null,inGame:false};
   SES=ses;
   overlay('<h2>部屋を準備中…</h2><p>接続サーバーにつないでいる。</p>','wait');
   const net=new HostNet({onConnect:cid=>hostOnConnect(ses,cid),onMessage:(cid,m)=>hostOnMessage(ses,cid,m),onClose:cid=>hostOnClose(ses,cid)});
@@ -605,12 +619,14 @@ function renderLobby(){
   $('lobStages').innerHTML=sh;
   $('lobSplitRow').style.display=cfg.mode==='coop'?'':'none';
   $('lobSplit').checked=cfg.split!==false;$('lobSplit').disabled=!host;
+  renderBusy($('lobBusy'),cfg.busy||2,!host);
   $('lobCoef').checked=!!cfg.coef;$('lobCoef').disabled=!host;$('lobCoefRow').style.display=g==='rx'?'':'none';
   const st=$('btnStart');
   st.style.display=host?'':'none';
   st.disabled=ps.length<2;
   $('lobWait').textContent=host?(ps.length<2?'友達が入るのを待っている（2〜4人）':`${ps.length}人そろった。開店しよう`):(ses.inGame?'ゲーム中。終わるまで待って':'ホストが開店するのを待っている…');
 }
+$('lobBusy').addEventListener('click',e=>{const b=e.target.closest('[data-b]');if(!b||!SES||SES.role!=='host')return;SES.cfg.busy=+b.dataset.b;SAVE.busy=SES.cfg.busy;persist();sfx('tap');lobbyChanged(true);});
 $('lobGame').addEventListener('click',e=>{const b=e.target.closest('[data-g]');if(!b||!SES||SES.role!=='host')return;const g=b.dataset.g==='atom'?'atom':'rx';if(SES.cfg.g!==g){SES.cfg.g=g;SES.cfg.stageId='s1';SAVE.g=g;persist();}sfx('tap');lobbyChanged(true);});
 $('lobMode').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b||!SES||SES.role!=='host')return;SES.cfg.mode=b.dataset.mode;sfx('tap');lobbyChanged(true);});
 $('lobStages').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(!b||!SES||SES.role!=='host')return;SES.cfg.stageId=b.dataset.st;sfx('tap');lobbyChanged(true);});
@@ -649,7 +665,7 @@ async function wake(on){
 function enterGame(){
   const V=view();if(!V)return;
   UI.active=null;UI.held=null;UI.sig={};UI.lastTick=-1;UI.pauseShown=false;UI.incSig='';
-  $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.g,V.stageId).name;
+  $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.g,V.stageId).name+(V.busy&&V.busy!==2?`・${E.busyOf(V.busy).name}`:'');
   buildTable(V.g);
   $('feed').innerHTML='';$('incoming').classList.remove('on');$('game').classList.remove('danger');
   $('mpbar').classList.toggle('on',V.mode!=='solo');
@@ -1197,14 +1213,14 @@ function starsRow(stars,score){
 }
 function soloResults(r){
   const g=r.g==='atom'?'atom':'rx',B=SV(g).best,ST=stagesOf(g);
-  const st=E.stageById(g,r.stageId),score=r.team.score;
-  const prev=B[st.id]||0;if(score>prev)B[st.id]=score;persist();
+  const st=E.stageById(g,r.stageId),score=r.team.score,bk=busyKey(st.id,r.busy),stars=r.stars;
+  const prev=B[bk]||0;if(score>prev)B[bk]=score;persist();
   const idx=ST.indexOf(st);
   const canNext=idx>=0&&idx<ST.length-1&&unlocked(idx+1,g);
-  let h=`<h2>${score>=(st.stars?st.stars[0]:0)?'営業終了！':'営業終了…'}</h2>
-    ${starsRow(st.stars,score)}
+  let h=`<h2>${score>=(stars?stars[0]:0)?'営業終了！':'営業終了…'}</h2>
+    ${starsRow(stars,score)}
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
-    ${st.stars?`<div style="font-size:12px;font-weight:800">★ ${st.stars.join(' / ')} 点　自己ベスト ${B[st.id]||0}</div>`:''}
+    ${stars?`<div style="font-size:12px;font-weight:800">忙しさ「${E.busyOf(r.busy).name}」の★ ${stars.join(' / ')} 点　自己ベスト ${B[bk]||0}</div>`:`<div style="font-size:12px;font-weight:800">忙しさ「${E.busyOf(r.busy).name}」 自己ベスト ${B[bk]||0}</div>`}
     <div class="stats"><div>提供<b>${r.team.served}</b></div><div>失敗<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>`;
   h+=nightNote()+reviewHTML(r,'solo');
   h+=`<div class="row-btns">${canNext?'<button class="btn go" data-ov="next">次のステージ</button>':''}<button class="btn" data-ov="retry">もう一回</button><button class="btn sub" data-ov="menu">メニュー</button></div>`;
@@ -1215,14 +1231,14 @@ function mpButtons(){
   return `<div class="row-btns"><button class="btn sub" data-ov="leave">退出</button></div><p class="waiting">ホストが「もう一回」を押すと次のゲームが始まる</p>`;
 }
 function coopResults(r){
-  const score=r.team.score,key=r.stageId+':'+r.n;
+  const score=r.team.score,key=busyKey(r.stageId+':'+r.n,r.busy);
   const CB=SV(r.g).coBest;const prev=CB[key]||0;if(score>prev)CB[key]=score;persist();
   const ps=r.players.slice().sort((a,b)=>b.pts-a.pts||b.atoms-a.atoms);
   const mvp=ps[0]&&(ps[0].pts>0||ps[0].atoms>0)?ps[0].id:null;
   let h=`<h2>${r.stars&&score>=r.stars[0]?'営業終了！ ナイス連携':'営業終了…'}</h2>
     ${starsRow(r.stars,score)}
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
-    ${r.stars?`<div style="font-size:12px;font-weight:800">${r.n}人の★ ${r.stars.join(' / ')} 点　チームベスト ${CB[key]||0}</div>`:''}
+    ${r.stars?`<div style="font-size:12px;font-weight:800">${r.n}人・${E.busyOf(r.busy).name}の★ ${r.stars.join(' / ')} 点　チームベスト ${CB[key]||0}</div>`:''}
     <div class="stats"><div>提供<b>${r.team.served}</b></div><div>失敗<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
     <div class="sec-h">貢献</div><div class="rank">`+ps.map(p=>`<div class="rk" style="--pc:${COLORS[p.slot%4]}"><div class="no">${p.id===mvp?'👑':''}</div>
       <div><div class="nm">${esc(p.name)}${p.id===me()?'（あなた）':''}${p.id===mvp?'<span class="mvp">MVP</span>':''}${p.left?'（退出）':''}</div>

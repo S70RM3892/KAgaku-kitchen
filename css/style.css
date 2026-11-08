@@ -400,3 +400,13 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--ticket);outline
 .gsel button{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:17px;padding:9px 6px;line-height:1.15}
 .gsel button small{font-family:var(--font-body);font-weight:800;font-size:10.5px;opacity:.85;letter-spacing:0}
 #title .gsel{margin-top:-4px}
+
+/* 忙しさ */
+.seg.busy{grid-template-columns:repeat(5,1fr);gap:5px}
+.seg.busy button{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px;padding:6px 2px;line-height:1.1;font-family:var(--font-body);font-weight:800;letter-spacing:-.05em}
+.seg.busy button small{font-size:10px;letter-spacing:-.02em;white-space:nowrap}
+.seg.busy button[data-b="5"]{font-size:16px}
+.seg.busy button[data-b="5"].on{background:var(--hot);color:#fff}
+.busybox{background:#0003;border-radius:14px;padding:8px 10px 6px}
+.busy-h{font-family:var(--font-display);color:var(--ticket);font-size:15px;margin-bottom:6px}
+.busydesc{margin-top:5px;min-height:1.5em}

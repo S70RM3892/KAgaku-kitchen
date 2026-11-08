@@ -46,6 +46,15 @@ export const RULES={
   },
 };
 export const GAMES={rx:'反応式モード',atom:'組成モード'};
+// 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
+export const BUSY=[null,
+  {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},
+  {name:'ふつう',desc:'標準の忙しさ',spawn:1,max:0,life:1,pts:1,exp:10,star:1},
+  {name:'いそがしい',desc:'注文が速く1枚多く並ぶ（得点×1.15）',spawn:0.7,max:1,life:1,pts:1.15,exp:10,star:1},
+  {name:'てんてこまい',desc:'注文がかなり速く2枚多く並ぶ（得点×1.3）',spawn:0.5,max:2,life:0.95,pts:1.3,exp:10,star:0.9},
+  {name:'無限オーダー',desc:'伝票が空いた瞬間に次の注文が来て常に満席。時間切れは−5でコンボは切れない（得点×1.5）',spawn:0,max:2,life:0.95,pts:1.5,exp:5,keep:true,star:0.75,refill:true},
+];
+export const busyOf=b=>BUSY[Math.min(5,Math.max(1,b|0))]||BUSY[2];
 export const RU=S=>RULES[S.g]||RULES.rx;
 export function stageById(g,id){const R=RULES[g]||RULES.rx;return id==='rv'?R.review:(R.stages.find(s=>s.id===id)||R.stages[0]);}
 export const cellsOf=g=>(RULES[g]||RULES.rx).cells;
@@ -74,19 +83,20 @@ function resetFlask(f){Object.assign(f,blank());}
 // cfg: {g:'rx'|'atom', mode:'solo'|'coop'|'versus', stageId, players:[{id,name,slot}], split, coef, weights:{key:box}, pool:[key]}
 export function createGame(cfg){
   const g=cfg.g==='atom'?'atom':'rx',R=RULES[g];
+  const busy=Math.min(5,Math.max(1,(cfg.busy|0)||2)),B=BUSY[busy];
   const st=stageById(g,cfg.stageId);
   const mode=cfg.mode,pids=cfg.players.map(p=>p.id),n=pids.length;
   const coop=mode==='coop',vs=mode==='versus';
   const split=coop&&n>1&&cfg.split!==false;
   const S={
-    g,mode,stageId:st.id,n,t:st.time,total:st.time,elapsed:0,spawnT:0,
+    g,busy,refill:!!B.refill,bpts:B.pts,bexp:B.exp,bkeep:!!B.keep,mode,stageId:st.id,n,t:st.time,total:st.time,elapsed:0,spawnT:0,
     running:false,paused:false,pausedBy:null,over:false,
-    max:mode==='solo'?st.max:Math.min(6,st.max+Math.max(0,n-2)),
-    spawn:st.spawn/(1+(coop?0.45:vs?0.5:0)*(n-1)),
-    life:st.life*(split?1.12:1),
+    max:Math.min(6,Math.max(2,(mode==='solo'?st.max:st.max+Math.max(0,n-2))+B.max)),
+    spawn:st.spawn/(1+(coop?0.45:vs?0.5:0)*(n-1))*B.spawn,
+    life:st.life*(split?1.12:1)*B.life,
     clue:st.clue,vip:!!st.vip,blackout:!!st.blackout,stockout:!!st.stockout,spread:!!st.spread,
     coef:g==='rx'&&!!(st.coef||cfg.coef),fb:st.fb??1,
-    stars:st.stars?st.stars.map(x=>Math.round(x*(coop?1+0.55*(n-1):1)/10)*10):null,
+    stars:st.stars?st.stars.map(x=>Math.round(x*(coop?1+0.55*(n-1):1)*B.star/10)*10):null,
     order:pids,players:{},orders:[],flasks:[],reqs:[],
     team:{score:0,combo:0,maxCombo:0,served:0,failed:0},
     bo:{next:24,until:0,on:false},so:{next:18,until:0,on:false,locked:[]},rush:false,
@@ -150,8 +160,13 @@ export function tick(S,dt){
   S.t-=dt;S.elapsed+=dt;S.spawnT+=dt;
   const vs=S.mode==='versus';
   if(!S.rush&&S.t<=30){S.rush=true;emit(S,'*',{h:'ラッシュタイム！',k:'ev',s:'event'});}
-  const interval=S.spawn*(S.rush?0.6:1);
-  if(S.orders.length===0||(S.spawnT>=interval&&S.orders.length<S.max))spawnOrder(S);
+  if(S.refill){
+    // 無限オーダー：空きがあれば0.4秒ごとに補充して常に満席にする
+    if(S.orders.length<S.max&&(S.orders.length===0||S.spawnT>=0.4))spawnOrder(S);
+  }else{
+    const interval=S.spawn*(S.rush?0.6:1);
+    if(S.orders.length===0||(S.spawnT>=interval&&S.orders.length<S.max))spawnOrder(S);
+  }
   // 注文の時間切れ
   for(let i=S.orders.length-1;i>=0;i--){
     const o=S.orders[i];o.left-=dt;
@@ -160,8 +175,9 @@ export function tick(S,dt){
     const tail=`<small>${T.n} = ${fmt(T.f)}</small>`;
     if(vs)emit(S,'*',{h:`時間切れ${tail}`,k:'ng',s:'expire',m:[o.k,'exp']});
     else{
-      S.team.score=Math.max(0,S.team.score-10);S.team.combo=0;S.team.failed++;
-      emit(S,'*',{h:`時間切れ −10${tail}`,k:'ng',s:'expire',m:[o.k,'exp']});
+      const pen=S.bexp??10;
+      S.team.score=Math.max(0,S.team.score-pen);if(!S.bkeep)S.team.combo=0;S.team.failed++;
+      emit(S,'*',{h:`時間切れ −${pen}${tail}`,k:'ng',s:'expire',m:[o.k,'exp']});
     }
     S.log.push({k:o.k,ok:false,why:'時間切れ',ci:o.ci,mode:o.mode,by:null});
   }
@@ -379,7 +395,7 @@ const ACT={
       const mult=Math.min(4,1+C.combo),tip=Math.round(base*0.8*ratio);
       // 協力：2人以上が入れたフラスコは連携ボーナス×1.2
       const team=S.mode==='coop'&&contrib.length>=2;
-      const pts=Math.round((base+tip*mult)*(1-0.35*hints)*(o.vip?2:1)*(team?1.2:1)*(over?0.7:1));
+      const pts=Math.round((base+tip*mult)*(1-0.35*hints)*(o.vip?2:1)*(team?1.2:1)*(over?0.7:1)*(S.bpts??1));
       C.score+=pts;C.combo++;C.maxCombo=Math.max(C.maxCombo,C.combo);C.served++;
       if(!vs){P.served++;P.pts+=pts;}
       S.orders.splice(S.orders.indexOf(o),1);resetFlask(f);
@@ -446,7 +462,7 @@ export function advance(V,dt){
 }
 export function results(S){
   return {
-    g:S.g,mode:S.mode,stageId:S.stageId,n:S.n,stars:S.stars,team:S.team,coef:S.coef,
+    g:S.g,busy:S.busy,mode:S.mode,stageId:S.stageId,n:S.n,stars:S.stars,team:S.team,coef:S.coef,
     players:S.order.map(id=>{const P=S.players[id];return {id,name:P.name,slot:P.slot,score:P.score,served:P.served,failed:P.failed,
       maxCombo:P.maxCombo,atoms:P.atoms,sent:P.sent,recv:P.recv,offset:P.offset,pts:P.pts,hints:P.hints,left:P.left};}),
     log:S.log

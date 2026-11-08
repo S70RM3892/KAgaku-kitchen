@@ -199,3 +199,18 @@ for(const mode of ['solo','coop','versus'])for(const st of ['s1','s3','s5','rv']
   console.log(`atom sim ${mode}/${st}: served=${S.team.served+Object.values(S.players).reduce((a,p)=>a+(mode==='versus'?p.served:0),0)}`);
 }
 console.log('ALL PASS');
+// ---- 忙しさ ----
+{
+  const {BUSY}=await import('../js/engine.js');
+  const S1=createGame({mode:'solo',stageId:'s1',players:[{id:'p0',name:'x'}],busy:1});
+  const S2=createGame({mode:'solo',stageId:'s1',players:[{id:'p0',name:'x'}]});
+  const S5=createGame({mode:'solo',stageId:'s1',players:[{id:'p0',name:'x'}],busy:5});
+  assert.equal(S2.busy,2);assert.ok(S1.max<S2.max&&S5.max>S2.max);assert.ok(S1.spawn>S2.spawn);
+  assert.ok(S5.stars[0]<S2.stars[0]&&S1.stars[0]<S2.stars[0]);
+  begin(S5);for(let i=0;i<40;i++)tick(S5,0.05);
+  assert.equal(S5.orders.length,S5.max,'refill fills the board');
+  // 提供して空いた枠はすぐ埋まる
+  const o=S5.orders[0];S5.orders.splice(0,1);for(let i=0;i<10;i++)tick(S5,0.05);
+  assert.equal(S5.orders.length,S5.max,'refilled after an order leaves');
+  console.log('busy ok',BUSY.slice(1).map(b=>b.name).join('/'),'max',S1.max,S2.max,S5.max);
+}
