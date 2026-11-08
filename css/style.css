@@ -511,3 +511,52 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--ticket);outline
   #game .flasks.three .flask:last-child{grid-column:1 / -1}
   #game .flask .f-bar{height:4px}
 }
+
+/* =================== 客ごとの鍋 =================== */
+.ticket .num,.pot .num{flex:0 0 auto;font-family:var(--font-display);font-weight:400;font-size:11px;line-height:15px;min-width:15px;text-align:center;background:var(--ink);color:#fff;border-radius:5px;padding:0 3px}
+.ticket{cursor:pointer;transition:transform .1s}
+.ticket.sel{box-shadow:0 0 0 4px var(--mc,#fff),0 3px 0 var(--ink);transform:translateY(-2px);z-index:1}
+.ticket.sel .num{background:var(--mc,var(--ink));color:var(--ink)}
+.ticket.cooking{background:#fff1c7}
+.ticket.failed{background:#ffd9cc}
+.ticket.burning{animation:shake .2s infinite;background:#ffb39c}
+.cpot{display:flex;align-items:center;gap:4px;min-height:15px;font-size:10px;font-weight:800;margin-top:auto}
+.cp{border-radius:5px;padding:0 4px;background:#ffffffaa;border:1px solid #12212933;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%;line-height:14px}
+.cp sub{font-size:.75em}
+.cp.heat{background:#f2a900;position:relative;padding-bottom:2px}
+.cp.heat i{position:absolute;left:0;bottom:0;height:2px;background:var(--hot);width:0}
+.cp.fail{background:var(--hot);color:#fff}
+.cp.fire{background:#3a0f05;color:#fff}
+.cpot .who{margin-left:auto;display:flex;gap:2px;flex:0 0 auto}
+.cpot .who i{width:10px;height:10px;border-radius:50%;background:var(--dc);border:1.5px solid var(--ink)}
+.cpot .who i.hot{box-shadow:0 0 0 2px #f2a900}
+.flasks{grid-template-columns:minmax(0,1fr)}
+.pot{position:relative;background:var(--steel);color:var(--ink);border:3px solid var(--ink);border-radius:12px;padding:6px 8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 0 0 3px var(--mc,var(--ticket)),0 3px 0 var(--ink);min-height:112px;overflow:hidden}
+.pot.empty{align-items:center;justify-content:center;box-shadow:none;background:#ffffff10;color:#9fc0c9;border:3px dashed #ffffff30;font-weight:800;font-size:13px;text-align:center}
+.pot.empty p{margin:0}
+.pot.s-heat{background:#fff3d6}
+.pot.s-fail{background:#ffd1c4}
+.pot.s-fire{background:#3a0f05;color:#fff;animation:shake .2s infinite}
+.p-head{display:flex;align-items:center;gap:6px;font-weight:800;min-width:0;flex:0 0 auto}
+.p-name{font-family:var(--font-display);font-weight:400;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.p-head .proc{margin-left:auto;flex:0 0 auto}
+.p-body{flex:1 1 30px;display:flex;flex-wrap:wrap;align-content:flex-start;align-items:center;gap:3px;min-height:30px;overflow:hidden}
+.p-body .hintline{margin:0;font-size:12px;font-weight:800;color:#5b7480}
+.p-body .plus{font-style:normal;font-weight:800;font-size:11px;opacity:.6}
+.p-status{font-size:11px;font-weight:800;color:#3c5560;flex:0 0 auto}
+.pot.s-fire .p-status{color:#ffd447}
+.pot .f-btns{display:flex;gap:4px;flex:0 0 auto}
+.pot .f-btns button{flex:1;border:2px solid var(--ink);border-radius:8px;font-weight:800;font-size:14px;padding:6px 2px;background:var(--ticket);color:var(--ink);white-space:nowrap}
+.pot .f-btns button.go{background:var(--cool);flex:1.4}
+.pot .f-btns button.dump{flex:0 0 40px;background:#fff}
+.pot .f-btns button.ext{background:var(--hot);color:#fff;font-size:16px}
+.pot .f-btns button:disabled{opacity:.35}
+.pot .f-btns .heatb{background:#fff}
+.pot .f-btns .heatb.h1{background:#ffb74d}
+.pot .f-btns .heatb.h2{background:var(--hot);color:#fff}
+.pot .eqp{font-size:13px;font-weight:800;width:100%}
+@media (orientation:landscape) and (min-width:560px){
+  #game .pot{min-height:0;height:100%}
+  #game .flasks{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)}
+}
+.t-top .tag.step,.t-top .tag.vip{flex:0 0 auto}

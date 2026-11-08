@@ -311,6 +311,22 @@ export function serves(key,rx){
   if(it.via)return rx===it.via;
   return x.p.some(([p])=>p===it.t);
 }
+// その注文を作る途中で出てくる中間体（棚にない物）の集合。客の鍋の中でこれができたら次の反応に進める
+const USEFUL={};
+export function usefulFor(key){
+  if(USEFUL[key])return USEFUL[key];
+  const it=MENU[key],set=new Set();if(!it)return set;
+  const stack=it.via?[RXBY[it.via]]:RX.filter(x=>x.p.some(([p])=>p===it.t));
+  const seen=new Set();
+  while(stack.length){
+    const x=stack.pop();if(seen.has(x.id))continue;seen.add(x.id);
+    for(const e of x.r)for(const id of e.ids){
+      if(SHELF_IDS.has(id)||set.has(id))continue;
+      set.add(id);RX.filter(y=>y.main===id).forEach(y=>stack.push(y));
+    }
+  }
+  return USEFUL[key]=set;
+}
 export const menuName=key=>{const it=MENU[key];return it?SUB[it.t].n:key;};
 
 /* ================= 判定 ================= */

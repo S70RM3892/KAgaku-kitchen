@@ -1,10 +1,9 @@
 // ゲームエンジン：状態(S)とアクションと時間経過だけを扱う。DOMには触らない。
 // ソロ・協力・対戦すべて同じエンジンで動き、マルチプレイではホストだけが tick() を回す。
-import {RXBY,CELLS,CELLCOL,SHELF_IDS,CATS,MENU,MCOST,TG,stepsOf,routeReagents,serves,judge,durOf,
+import {RXBY,CELLS,CELLCOL,SHELF_IDS,CATS,MENU,MCOST,TG,stepsOf,routeReagents,serves,judge,durOf,usefulFor,
   fmt,fOf,nameOf,STAGES,REVIEW,poolFor,cellLabel} from './chem.js';
 import * as A from './atoms.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
-export const FL='ABCDEFGH';
 export const ROT_SEC=40;      // 協力：棚替えの間隔
 export const REQ_LIFE=15;     // 協力：リクエストの寿命
 export const WARN_SEC=3.5;    // 対戦：おじゃまが着弾するまでの猶予
@@ -78,10 +77,15 @@ export function owners(S){
 }
 
 /* ---------- 生成 ---------- */
-const blank=()=>({items:[],cat:null,heat:0,state:'idle',t:0,dur:0,res:null,prod:null,fail:null,taps:0,burn:0,warned:false,by:{}});
-function newFlask(id,owner,idx){return Object.assign({id,owner,idx},blank());}
-function resetFlask(f){Object.assign(f,blank());}
-// cfg: {g:'rx'|'atom', mode:'solo'|'coop'|'versus', stageId, players:[{id,name,slot}], split, coef, weights:{key:box}, pool:[key]}
+// 客（注文）ごとに鍋を持つ。協力・ソロは客ごとに1つ（全員で共有）、対戦は客ごと×プレイヤーごと
+const blankPot=()=>({items:[],cat:null,heat:0,state:'idle',t:0,dur:0,res:null,fail:null,mid:null,taps:0,burn:0,by:{},rb:null});
+const potKey=(S,pid)=>S.mode==='versus'?pid:'*';
+export function potOf(S,o,pid){const k=potKey(S,pid);return o.pots[k]||(o.pots[k]=blankPot());}
+export const peekPot=(S,o,pid)=>o&&o.pots[potKey(S,pid)]||null;
+function resetPot(p){Object.assign(p,blankPot());}
+const orderById=(S,id)=>S.orders.find(o=>o.id===id);
+
+// cfg: {g:'rx'|'atom', mode:'solo'|'coop'|'versus', stageId, players:[{id,name,slot}], split, coef, busy, weights:{key:box}, pool:[key]}
 export function createGame(cfg){
   const g=cfg.g==='atom'?'atom':'rx',R=RULES[g];
   const busy=Math.min(5,Math.max(1,(cfg.busy|0)||2)),B=BUSY[busy];
@@ -98,7 +102,7 @@ export function createGame(cfg){
     clue:st.clue,vip:!!st.vip,blackout:!!st.blackout,stockout:!!st.stockout,spread:!!st.spread,
     coef:g==='rx'&&!!(st.coef||cfg.coef),fb:st.fb??1,
     stars:st.stars?st.stars.map(x=>Math.round(x*(coop?1+0.55*(n-1):1)*B.star/10)*10):null,
-    order:pids,players:{},orders:[],flasks:[],reqs:[],
+    order:pids,players:{},orders:[],reqs:[],
     team:{score:0,combo:0,maxCombo:0,served:0,failed:0},
     bo:{next:24,until:0,on:false},so:{next:18,until:0,on:false,locked:[]},rush:false,
     split,rot:0,rotNext:ROT_SEC,
@@ -112,20 +116,14 @@ export function createGame(cfg){
       score:0,combo:0,maxCombo:0,served:0,failed:0,pts:0,atoms:0,hints:0,
       sent:0,recv:0,offset:0,inc:[],fx:{dark:0,lock:{}},focus:null,left:false,stampAt:0};
   });
-  if(vs)pids.forEach(pid=>{for(let i=0;i<st.flasks;i++)S.flasks.push(newFlask(++S.uid,pid,i));});
-  else{
-    const nf=coop?Math.min(4,st.flasks+n-1):st.flasks;
-    for(let i=0;i<nf;i++)S.flasks.push(newFlask(++S.uid,mode==='solo'?pids[0]:null,i));
-  }
   return S;
 }
 
 export function begin(S){S.running=true;spawnOrder(S);spawnOrder(S);}
 
 function emit(S,to,e){S.ev.push(Object.assign({to},e));}
-function emitFlask(S,f,e){emit(S,f.owner==null?'*':f.owner,e);}
-const flaskById=(S,id)=>S.flasks.find(f=>f.id===id);
-export const canUse=(S,f,pid)=>f.owner==null||f.owner===pid;
+// 鍋に関わる人へ（共有鍋なら全員、対戦なら持ち主）
+function emitPot(S,key,e){emit(S,key==='*'?'*':key,e);}
 export function isLocked(S,pid,k){
   if(S.so.on&&S.so.locked.includes(k))return true;
   const P=S.players[pid];return !!(P&&P.fx.lock[k]>S.elapsed);
@@ -150,10 +148,11 @@ function spawnOrder(S){
   const vip=S.vip&&S.elapsed>20&&Math.random()<0.18;
   const life=R.life(k,mode)*S.life*(vip?0.65:1);
   const nclue=R.nclue(k)||1;
-  S.orders.push({id:++S.uid,k,mode,ci:Math.floor(Math.random()*nclue),total:life,left:life,vip,hints:0,ph:{},ban:{},claim:null});
+  S.orders.push({id:++S.uid,k,mode,ci:Math.floor(Math.random()*nclue),total:life,left:life,vip,hints:0,ph:{},pots:{}});
   S.spawnT=0;
   emit(S,'*',{s:'pop',m:[k,'seen']});
 }
+function removeOrder(S,o){const i=S.orders.indexOf(o);if(i>=0)S.orders.splice(i,1);S.reqs=S.reqs.filter(r=>r.o!==o.id);}
 
 /* ---------- 時間経過（ホストのみ） ---------- */
 export function tick(S,dt){
@@ -172,7 +171,7 @@ export function tick(S,dt){
   for(let i=S.orders.length-1;i>=0;i--){
     const o=S.orders[i];o.left-=dt;
     if(o.left>0)continue;
-    S.orders.splice(i,1);const T=RU(S).tgt(o.k);
+    removeOrder(S,o);const T=RU(S).tgt(o.k);
     const tail=`<small>${T.n} = ${fmt(T.f)}</small>`;
     if(vs)emit(S,'*',{h:`時間切れ${tail}`,k:'ng',s:'expire',m:[o.k,'exp']});
     else{
@@ -182,18 +181,22 @@ export function tick(S,dt){
     }
     S.log.push({k:o.k,ok:false,why:'時間切れ',ci:o.ci,mode:o.mode,by:null});
   }
-  // フラスコ
-  S.flasks.forEach(f=>{
-    if(f.state==='heat'){f.t+=dt;if(f.t>=f.dur)finishReaction(S,f);}
-    else if(f.state==='ready'){f.t+=dt;if(f.t>=7)f.warned=true;if(f.t>=11)ignite(S,f);}
-    else if(f.state==='fire'){
-      f.burn+=dt;
-      if(S.spread&&f.burn>=6){
-        f.burn=0;
-        S.flasks.filter(g=>g.owner===f.owner&&Math.abs(g.idx-f.idx)===1&&g.state!=='fire').forEach(g=>ignite(S,g));
+  // 鍋：加熱→判定、失敗作の放置で発火、延焼
+  for(const o of S.orders.slice()){
+    for(const key of Object.keys(o.pots)){
+      const p=o.pots[key];if(!p)continue;
+      if(p.state==='heat'){p.t+=dt;if(p.t>=p.dur)finishPot(S,o,key,p);}
+      else if(p.state==='fail'){p.t+=dt;if(p.t>=10)ignite(S,o,key,p);}
+      else if(p.state==='fire'){
+        p.burn+=dt;
+        if(S.spread&&p.burn>=6){
+          p.burn=0;const i=S.orders.indexOf(o);
+          [S.orders[i-1],S.orders[i+1]].forEach(n=>{if(!n)return;const q=n.pots[key];if(q&&q.state!=='fire'&&q.items.length)ignite(S,n,key,q);});
+        }
       }
+      if(!S.orders.includes(o))break;
     }
-  });
+  }
   // 停電（全員）：棚のラベルが消える
   if(S.blackout){
     if(S.elapsed>=S.bo.next&&!S.bo.on){S.bo.on=true;S.bo.until=S.elapsed+7;S.bo.next=S.elapsed+30;emit(S,'*',{h:RU(S).dark,k:'ev',s:'event'});}
@@ -213,7 +216,7 @@ export function tick(S,dt){
       S.rot++;S.rotNext+=ROT_SEC;S.reqs=[];
       emit(S,'*',{h:`棚替え！<small>${RU(S).rot}</small>`,k:'ev',s:'event'});
     }
-    S.reqs=S.reqs.filter(r=>{const f=flaskById(S,r.f);const T=S.players[r.to];return S.elapsed-r.t<REQ_LIFE&&f&&f.state==='idle'&&T&&!T.left;});
+    S.reqs=S.reqs.filter(r=>{const o=orderById(S,r.o),p=o&&peekPot(S,o,r.from),T=S.players[r.to];return S.elapsed-r.t<REQ_LIFE&&(!p||p.state==='idle')&&o&&T&&!T.left;});
   }
   // 対戦：おじゃまの着弾
   if(vs){
@@ -235,30 +238,72 @@ function pickLocks(S,k){
   c.sort(()=>Math.random()-0.5);return c.slice(0,k);
 }
 function failText(S,res){return res.lv<=S.fb?res.why:'反応しない';}
-function finishReaction(S,f){
-  f.t=0;f.warned=false;
+// 反応が終わったら判定。客の注文どおりなら自動で提供、途中の中間体なら鍋に残して次へ、違う物なら −5
+function finishPot(S,o,key,p){
+  p.t=0;
+  const T=RU(S).tgt(o.k);
   if(S.g==='atom'){
-    // 組成モード：分子式（組成式）がレシピにあれば完成
-    const m=(f.res&&f.res.comp)||{},k=A.keyOf(m),hits=A.BYKEY[k];
-    if(!hits){f.state='fail';f.fail={why:`${A.hill(m)} はレシピに無い`,label:A.hill(m)};emitFlask(S,f,{s:'fail'});return;}
-    const want=S.orders.find(o=>A.BYID[o.k]&&A.BYID[o.k].k===k);
-    const d=want?A.BYID[want.k]:hits[0];
-    f.state='ready';f.prod={k,id:d.id,label:hits.length===1?d.f:A.hill(m),over:[]};
-    emitFlask(S,f,{s:'ready'});return;
+    const m=(p.res&&p.res.comp)||{},k=A.keyOf(m),hits=A.BYKEY[k];
+    if(!hits){p.state='fail';p.fail={why:`${A.hill(m)} はレシピに無い`,label:A.hill(m)};emitPot(S,key,{s:'fail'});return;}
+    if(A.BYID[o.k]&&A.BYID[o.k].k===k){autoServe(S,o,key,p,[],null);return;}
+    const d=hits[0];
+    mistake(S,o,key,p,hits.length===1?d.f:A.hill(m),d.f,`正解：${T.n} = ${fmt(T.f)}`);return;
   }
-  const res=f.res||{ok:false,why:'反応しない',lv:1};
+  const res=p.res||{ok:false,why:'反応しない',lv:1};
   if(!res.ok){
-    f.state='fail';f.fail={why:failText(S,res)};
-    emitFlask(S,f,{h:`フラスコ${FL[f.idx]}：反応しない<small>${S.fb?f.fail.why:'条件か試薬が違う'}</small>`,k:'ng',s:'fail'});
+    p.state='fail';p.fail={why:failText(S,res)};
+    emitPot(S,key,{h:`反応しない<small>${S.fb?p.fail.why:'条件か試薬が違う'}</small>`,k:'ng',s:'fail'});
     return;
   }
   const x=RXBY[res.rx];
-  f.state='ready';f.prod={rx:x.id,main:x.main,over:res.over||[]};
-  emitFlask(S,f,{s:'ready'});
+  if(serves(o.k,x.id)){autoServe(S,o,key,p,res.over||[],x.id);return;}
+  if(usefulFor(o.k).has(x.main)){
+    // 中間体：鍋に残る。続けて次の反応へ
+    const by=p.by,rb=p.rb;resetPot(p);p.items=[[x.main,1,1]];p.by=by;p.rb=rb;p.mid=x.id;
+    emitPot(S,key,{h:`中間体 ${fmt(fOf(x.main))} ができた<small>続けて次の反応へ</small>`,k:'ok',s:'ready'});
+    return;
+  }
+  const it=MENU[o.k];
+  const why=it.via&&x.main===it.t?`製法が違う（${it.proc}で作る）`:`正解：${T.n} = ${fmt(T.f)}`;
+  mistake(S,o,key,p,x.main,fOf(x.main),why,x.id);
 }
-function ignite(S,f){
-  resetFlask(f);f.state='fire';
-  emitFlask(S,f,{h:`フラスコ${FL[f.idx]}が燃えた！ 連打で消火`,k:'ng',s:'fire'});
+function creditOf(S,key,p){return key!=='*'?key:(p.rb&&S.players[p.rb]?p.rb:S.order[0]);}
+function autoServe(S,o,key,p,overList,rx){
+  const vs=S.mode==='versus',pid=creditOf(S,key,p),P=S.players[pid],R=RU(S),T=R.tgt(o.k);
+  const C=vs?P:S.team,contrib=Object.keys(p.by);
+  const hints=hintsOf(S,o,pid),over=overList.length>0;
+  const base=R.base(o.k),ratio=Math.max(0,o.left/o.total);
+  const mult=Math.min(4,1+C.combo),tip=Math.round(base*0.8*ratio);
+  // 協力：2人以上が入れた鍋は連携ボーナス×1.2
+  const team=S.mode==='coop'&&contrib.length>=2;
+  const pts=Math.round((base+tip*mult)*(1-0.35*hints)*(o.vip?2:1)*(team?1.2:1)*(over?0.7:1)*(S.bpts??1));
+  C.score+=pts;C.combo++;C.maxCombo=Math.max(C.maxCombo,C.combo);C.served++;
+  if(!vs){P.served++;P.pts+=pts;}
+  removeOrder(S,o);
+  S.log.push({k:o.k,ok:true,hinted:hints>0,over:overList,rx,ci:o.ci,mode:o.mode,by:pid});
+  const mk=hints||over?'okh':'ok';
+  (S.mode==='coop'?[...new Set([pid,...contrib])]:[pid]).forEach(q=>emit(S,q,{m:[o.k,mk]}));
+  const tail=`<small>${fmt(T.f)} ${T.n}${T.proc?`（${T.proc}）`:''}</small>`;
+  const extra=(team?' 連携！':'')+(over?`（${overList.join('・')}：×0.7）`:'');
+  emit(S,pid,{h:`提供 +${pts}${mult>1?`（チップ×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'});
+  S.order.filter(q=>q!==pid).forEach(q=>{
+    if(vs){const mine=o.pots[q];emit(S,q,{h:`<b>${P.name}</b> に取られた +${pts}${tail}`,k:'ng',s:mine&&mine.items.length?'snipe':'pop'});}
+    else emit(S,q,{h:`<b>${P.name}</b> +${pts}${mult>1?`（×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'});
+  });
+  if(vs)sendAttack(S,P,attackPower(S,o.k,o.vip,P.combo,S.rush));
+}
+function mistake(S,o,key,p,madeLabel,madeF,why,rx){
+  const vs=S.mode==='versus',pid=creditOf(S,key,p),P=S.players[pid],C=vs?P:S.team;
+  C.score=Math.max(0,C.score-5);C.combo=0;C.failed++;if(!vs)P.failed++;
+  const contrib=Object.keys(p.by);
+  (S.mode==='coop'?[...new Set([pid,...contrib])]:[pid]).forEach(q=>emit(S,q,{m:[o.k,'ng']}));
+  S.log.push({k:o.k,ok:false,why:'ちがう物',given:S.g==='atom'?madeLabel:rx,ci:o.ci,mode:o.mode,by:pid});
+  p.state='fail';p.fail={why:`${S.g==='atom'?madeLabel:fOf(madeLabel)} ができた（注文とちがう）`,made:madeF,label:madeLabel};
+  emitPot(S,key,{h:`ちがう物ができた −5<small>${fmt(S.g==='atom'?madeLabel:madeF)}｜${why}</small>`,k:'ng',s:'ng'});
+}
+function ignite(S,o,key,p){
+  resetPot(p);p.state='fire';
+  emitPot(S,key,{h:`${RU(S).tgt(o.k).n}の鍋が燃えた！ 連打で消火`,k:'ng',s:'fire'});
 }
 
 /* ---------- 対戦：おじゃま ---------- */
@@ -279,30 +324,36 @@ function sendAttack(S,P,pow){
   emit(S,P.id,{h:`おじゃま${pow}（${fxName(tot)}）→ <b>${T.name}</b>`,k:'ok',s:'atk'});
 }
 function applyAttack(S,pid,x){
-  const T=S.players[pid],A=S.players[x.from],pow=x.pow,fx=[];
+  const T=S.players[pid],A2=S.players[x.from],pow=x.pow,fx=[];
   if(pow<=0)return;
   T.recv+=pow;
   if(pow>=3){
-    const rank=f=>f.state==='ready'?3:f.state==='heat'?2:f.items.length?1:0;
-    const fl=S.flasks.filter(f=>f.owner===pid&&f.state!=='fire').sort((a,b)=>rank(b)-rank(a));
-    if(fl.length){ignite(S,fl[0]);fx.push('引火');}
+    const rank=p=>p.state==='heat'?3:p.items.length?2:1;
+    const cands=S.orders.map(o=>({o,p:o.pots[pid]})).filter(c=>c.p&&c.p.state!=='fire').sort((a,b)=>rank(b.p)-rank(a.p));
+    if(cands.length){ignite(S,cands[0].o,pid,cands[0].p);fx.push('引火');}
   }
   if(pow===2||pow>=4){pickLocks(S,3).forEach(s=>T.fx.lock[s]=S.elapsed+7);fx.push('在庫切れ');}
   if(pow===1||pow>=4){T.fx.dark=S.elapsed+(pow>=4?3:4.5);fx.push('煙幕');}
   if(!fx.length)fx.push('不発');
-  emit(S,pid,{h:`💥 ${fx.join('＋')}！<small>${A?A.name:'?'} の攻撃</small>`,k:'ng',s:'hit'});
-  if(A)emit(S,A.id,{h:`命中：${fx.join('＋')} → <b>${T.name}</b>`,k:'ok',s:'atk'});
+  emit(S,pid,{h:`💥 ${fx.join('＋')}！<small>${A2?A2.name:'?'} の攻撃</small>`,k:'ng',s:'hit'});
+  if(A2)emit(S,A2.id,{h:`命中：${fx.join('＋')} → <b>${T.name}</b>`,k:'ok',s:'atk'});
 }
 
 /* ---------- アクション ---------- */
-function putIn(S,f,k,pid){
+function putIn(S,p,k,pid){
   const R=RU(S);
-  if(k[0]==='@'){const c=k.slice(1);f.cat=f.cat===c?null:c;if(f.cat)f.by[pid]=(f.by[pid]||0)+1;return true;}
-  const x=f.items.find(y=>y[0]===k);
+  if(k[0]==='@'){const c=k.slice(1);p.cat=p.cat===c?null:c;if(p.cat)p.by[pid]=(p.by[pid]||0)+1;return true;}
+  const x=p.items.find(y=>y[0]===k);
   if(x){if(x[2]||x[1]>=R.maxCoef)return false;x[1]++;}
-  else{if(f.items.length>=R.maxSpecies)return false;f.items.push([k,1,0]);}
-  f.by[pid]=(f.by[pid]||0)+1;
+  else{if(p.items.length>=R.maxSpecies)return false;p.items.push([k,1,0]);}
+  p.by[pid]=(p.by[pid]||0)+1;
   return true;
+}
+// 操作対象の鍋（a.o = 注文ID）
+function myPot(S,pid,a,need){
+  const o=orderById(S,a.o);if(!o)return null;
+  const p=need?potOf(S,o,pid):peekPot(S,o,pid);
+  return p?{o,p}:null;
 }
 const ACT={
   add(S,pid,P,a){
@@ -310,117 +361,61 @@ const ACT={
     if(isLocked(S,pid,k)){emit(S,pid,{h:`${fmt(RU(S).label(k))} は在庫切れ`,k:'ng',s:'lock'});return;}
     const own=owners(S);
     if(own&&own[k]!==pid){
-      // 自分の担当外 → 担当者にリクエスト
-      const f=flaskById(S,a.f);
-      if(!f||f.state!=='idle'||!canUse(S,f,pid)){emit(S,pid,{h:'空いているフラスコを選んでから頼もう',k:'ng',s:'lock'});return;}
+      // 自分の担当外 → 担当者にリクエスト（入れ先は自分が選んでいる客の鍋）
+      const t=myPot(S,pid,a,true);
+      if(!t||t.p.state!=='idle'){emit(S,pid,{h:'客を選んでから頼もう',k:'ng',s:'lock'});return;}
       if(S.reqs.filter(r=>r.from===pid).length>=8){emit(S,pid,{h:'リクエストは8個まで',k:'ng',s:'lock'});return;}
-      S.reqs.push({id:++S.uid,from:pid,to:own[k],s:k,f:f.id,t:S.elapsed});
+      S.reqs.push({id:++S.uid,from:pid,to:own[k],s:k,o:t.o.id,t:S.elapsed});
       emit(S,own[k],{s:'req'});
       return;
     }
-    let f=null,rq=null;
+    // 自分宛てのリクエストがあれば、頼んだ人が選んだ客の鍋へ
+    let tgt=null,rq=null;
     if(S.reqs.length){
-      rq=S.reqs.find(r=>{if(r.to!==pid||r.s!==k)return false;const g=flaskById(S,r.f);return g&&g.state==='idle';})||null;
-      if(rq)f=flaskById(S,rq.f);
+      rq=S.reqs.find(r=>{if(r.to!==pid||r.s!==k)return false;const o=orderById(S,r.o);const p=o&&potOf(S,o,r.from);return p&&p.state==='idle';})||null;
+      if(rq){const o=orderById(S,rq.o);tgt={o,p:potOf(S,o,rq.from)};}
     }
-    if(!f){
-      f=flaskById(S,a.f);
-      if(!f||!canUse(S,f,pid)||f.state!=='idle')f=S.flasks.find(x=>x.owner===pid&&x.state==='idle')||null;
-    }
-    if(!f){emit(S,pid,{h:'空いているフラスコがない',k:'ng',s:'lock'});return;}
-    if(!putIn(S,f,k,pid))return;
+    if(!tgt){tgt=myPot(S,pid,a,true);if(!tgt){emit(S,pid,{h:'客（伝票）を選んでから入れよう',k:'ng',s:'lock'});return;}}
+    if(tgt.p.state!=='idle'){emit(S,pid,{h:tgt.p.state==='heat'?'その鍋は反応中':'先に鍋を空けよう',k:'ng',s:'lock'});return;}
+    if(!putIn(S,tgt.p,k,pid))return;
     P.atoms++;
     if(rq){S.reqs.splice(S.reqs.indexOf(rq),1);emit(S,rq.from,{s:'gift'});}
   },
   chip(S,pid,P,a){
-    const f=flaskById(S,a.f);if(!f||!canUse(S,f,pid)||f.state!=='idle')return;
-    if(a.s==='@'){f.cat=null;return;}
-    const x=f.items.find(y=>y[0]===a.s);if(!x)return;
-    x[1]--;if(x[1]<=0||x[2])f.items=f.items.filter(y=>y!==x);
+    const t=myPot(S,pid,a,false);if(!t||t.p.state!=='idle')return;
+    if(a.s==='@'){t.p.cat=null;return;}
+    const x=t.p.items.find(y=>y[0]===a.s);if(!x)return;
+    x[1]--;if(x[1]<=0||x[2])t.p.items=t.p.items.filter(y=>y!==x);
   },
   heat(S,pid,P,a){
     if(S.g!=='rx')return;
-    const f=flaskById(S,a.f);if(!f||!canUse(S,f,pid)||f.state!=='idle')return;
-    const h=a.h|0;if(h<0||h>2)return;f.heat=h;
+    const t=myPot(S,pid,a,true);if(!t||t.p.state!=='idle')return;
+    const h=a.h|0;if(h<0||h>2)return;t.p.heat=h;
   },
   react(S,pid,P,a){
-    const f=flaskById(S,a.f);if(!f||!canUse(S,f,pid)||f.state!=='idle'||!f.items.length)return;
+    const t=myPot(S,pid,a,false);if(!t)return;const p=t.p;
+    if(p.state!=='idle'||!p.items.length)return;
     if(S.g==='atom'){
-      const m={};f.items.forEach(([s,c])=>m[s]=c);
-      f.res={comp:m};f.dur=0.9+0.05*A.atomCount(m);
-    }else{f.res=judge(f.items,f.cat,f.heat,S.coef);f.dur=durOf(f.items,f.heat,f.cat);}
-    f.state='heat';f.t=0;
-  },
-  pour(S,pid,P,a){
-    if(S.g!=='rx')return;
-    const from=flaskById(S,a.f),to=flaskById(S,a.to);
-    if(!from||!to||from===to||!canUse(S,from,pid)||!canUse(S,to,pid)||from.state!=='ready'||to.state!=='idle')return;
-    const m=from.prod.main;
-    if(!to.items.some(y=>y[0]===m)){if(to.items.length>=RU(S).maxSpecies)return;to.items.push([m,1,1]);}
-    for(const q in from.by)to.by[q]=(to.by[q]||0)+from.by[q];
-    resetFlask(from);
+      const m={};p.items.forEach(([s,c])=>m[s]=c);
+      p.res={comp:m};p.dur=0.9+0.05*A.atomCount(m);
+    }else{p.res=judge(p.items,p.cat,p.heat,S.coef);p.dur=durOf(p.items,p.heat,p.cat);}
+    p.state='heat';p.t=0;p.rb=pid;
   },
   dump(S,pid,P,a){
-    const f=flaskById(S,a.f);if(!f||!canUse(S,f,pid)||f.state==='fire'||f.state==='heat')return;
-    resetFlask(f);
+    const t=myPot(S,pid,a,false);if(!t||t.p.state==='fire'||t.p.state==='heat')return;
+    resetPot(t.p);
   },
   ext(S,pid,P,a){
-    const f=flaskById(S,a.f);if(!f||!canUse(S,f,pid)||f.state!=='fire')return;
-    f.taps++;
-    if(f.taps>=4){resetFlask(f);emitFlask(S,f,{h:'消火した',k:'ok'});}
+    const t=myPot(S,pid,a,false);if(!t||t.p.state!=='fire')return;
+    t.p.taps++;
+    if(t.p.taps>=4){resetPot(t.p);emitPot(S,potKey(S,pid),{h:'消火した',k:'ok'});}
   },
   hint(S,pid,P,a){
-    const o=S.orders.find(x=>x.id===a.o);if(!o)return;
+    const o=orderById(S,a.o);if(!o)return;
     if(S.mode==='versus'){if((o.ph[pid]||0)<2){o.ph[pid]=(o.ph[pid]||0)+1;P.hints++;}}
     else if(o.hints<2){o.hints++;P.hints++;}
   },
-  claim(S,pid,P,a){
-    if(S.mode!=='coop')return;
-    const o=S.orders.find(x=>x.id===a.o);if(!o)return;
-    o.claim=o.claim===pid?null:pid;
-  },
-  focus(S,pid,P,a){if(S.mode==='coop'&&flaskById(S,a.f))P.focus=a.f;},
-  serve(S,pid,P,a){
-    const f=flaskById(S,a.f);if(!f||!canUse(S,f,pid)||f.state!=='ready')return;
-    const o=S.orders.find(x=>x.id===a.o);
-    if(!o){emit(S,pid,{h:'その注文はもう無い',k:'ng',s:'lock'});return;}
-    const vs=S.mode==='versus';
-    if(vs&&o.ban[pid]){emit(S,pid,{h:'この注文には一度誤配したので出せない',k:'ng',s:'lock'});return;}
-    const R=RU(S),T=R.tgt(o.k),p=f.prod,C=vs?P:S.team;
-    const contrib=Object.keys(f.by);
-    const tail=`<small>${fmt(T.f)} ${T.n}${T.proc?`（${T.proc}）`:''}</small>`;
-    const ok=S.g==='atom'?(A.BYID[o.k]&&p.k===A.BYID[o.k].k):serves(o.k,p.rx);
-    if(ok){
-      const hints=hintsOf(S,o,pid),over=p.over.length>0;
-      const base=R.base(o.k),ratio=Math.max(0,o.left/o.total);
-      const mult=Math.min(4,1+C.combo),tip=Math.round(base*0.8*ratio);
-      // 協力：2人以上が入れたフラスコは連携ボーナス×1.2
-      const team=S.mode==='coop'&&contrib.length>=2;
-      const pts=Math.round((base+tip*mult)*(1-0.35*hints)*(o.vip?2:1)*(team?1.2:1)*(over?0.7:1)*(S.bpts??1));
-      C.score+=pts;C.combo++;C.maxCombo=Math.max(C.maxCombo,C.combo);C.served++;
-      if(!vs){P.served++;P.pts+=pts;}
-      S.orders.splice(S.orders.indexOf(o),1);resetFlask(f);
-      S.log.push({k:o.k,ok:true,hinted:hints>0,over:p.over,rx:p.rx||null,ci:o.ci,mode:o.mode,by:pid});
-      const mk=hints||over?'okh':'ok';
-      (S.mode==='coop'?[...new Set([pid,...contrib])]:[pid]).forEach(q=>emit(S,q,{m:[o.k,mk]}));
-      const extra=(team?' 連携！':'')+(over?`（${p.over.join('・')}：×0.7）`:'');
-      emit(S,pid,{h:`+${pts}${mult>1?`（チップ×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'});
-      S.order.filter(q=>q!==pid).forEach(q=>emit(S,q,vs?{h:`<b>${P.name}</b> に取られた +${pts}${tail}`,k:'ng',s:'snipe'}:{h:`<b>${P.name}</b> +${pts}${mult>1?`（×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'}));
-      if(vs)sendAttack(S,P,attackPower(S,o.k,o.vip,P.combo,S.rush));
-    }else{
-      C.score=Math.max(0,C.score-10);C.combo=0;C.failed++;
-      if(!vs)P.failed++;
-      resetFlask(f);
-      if(vs)o.ban[pid]=true;else S.orders.splice(S.orders.indexOf(o),1);
-      S.log.push({k:o.k,ok:false,why:'誤配',given:S.g==='atom'?p.label:p.rx,ci:o.ci,mode:o.mode,by:pid});
-      const who=S.mode==='coop'?[...new Set([pid,...contrib])]:[pid];
-      who.forEach(q=>emit(S,q,{m:[o.k,'ng']}));
-      const gv=p.rx&&RXBY[p.rx],it=MENU[o.k];
-      const wrong=S.g==='rx'&&it.via&&gv&&gv.main===it.t?`製法が違う（${it.proc}で作る）`:`正解：${T.n} = ${fmt(T.f)}`;
-      emit(S,pid,{h:`ちがう！ −10<small>${wrong}${vs?'（この注文には出禁）':''}</small>`,k:'ng',s:'ng'});
-      if(S.mode==='coop')S.order.filter(q=>q!==pid).forEach(q=>emit(S,q,{h:`<b>${P.name}</b> が誤配 −10<small>${wrong}</small>`,k:'ng',s:'ng'}));
-    }
-  },
+  focus(S,pid,P,a){if(orderById(S,a.o))P.focus=a.o;},
 };
 
 export function apply(S,pid,a){
@@ -442,12 +437,10 @@ export function playerLeft(S,pid){
   const P=S.players[pid];if(!P||P.left)return;
   P.left=true;P.inc=[];
   S.reqs=S.reqs.filter(r=>r.from!==pid&&r.to!==pid);
-  S.orders.forEach(o=>{if(o.claim===pid)o.claim=null;});
   emit(S,'*',{h:`<b>${P.name}</b> が退出した`,k:'ng',s:'lock'});
 }
 
 /* ---------- 通信用 ---------- */
-// 判定結果(res)はホストだけが持てばよいが、予測用にクライアントにも送る
 export function snapshot(S){
   const o={};
   for(const k in S)if(k!=='ev'&&k!=='log'&&k!=='pool'&&k!=='w')o[k]=S[k];
@@ -457,8 +450,10 @@ export function snapshot(S){
 export function advance(V,dt){
   if(!V.running||V.paused||V.over)return;
   V.t=Math.max(0,V.t-dt);V.elapsed+=dt;
-  V.orders.forEach(o=>{o.left=Math.max(0,o.left-dt);});
-  V.flasks.forEach(f=>{if(f.state==='heat')f.t=Math.min(f.dur,f.t+dt);else if(f.state==='ready')f.t+=dt;});
+  V.orders.forEach(o=>{
+    o.left=Math.max(0,o.left-dt);
+    for(const k in o.pots){const p=o.pots[k];if(p&&p.state==='heat')p.t=Math.min(p.dur,p.t+dt);else if(p&&p.state==='fail')p.t+=dt;}
+  });
   if(V.mode==='versus')for(const id in V.players)V.players[id].inc.forEach(x=>{x.t=Math.max(0,x.t-dt);});
 }
 export function results(S){
