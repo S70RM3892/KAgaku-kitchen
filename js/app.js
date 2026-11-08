@@ -27,8 +27,9 @@ if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(SAVE.g!=='atom')SAVE.g='rx';
 SAVE.busy=Math.min(5,Math.max(1,(SAVE.busy|0)||2));
 // 表示・操作の設定（自分で選べる）
-const UI_DEF={auto:false,names:false,colors:true,fs:'m',layout:'split',repeat:true,adv:true,bgm:true,vib:true};
+const UI_DEF={auto:true,names:false,colors:true,fs:'m',layout:'split',repeat:true,adv:true,bgm:true,vib:true};
 SAVE.ui=Object.assign({},UI_DEF,SAVE.ui||{});
+if((SAVE.uiv|0)<2){SAVE.ui.auto=true;SAVE.uiv=2;}
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
 const SV=g=>SAVE[g==='atom'?'atom':'rx'];
@@ -668,7 +669,7 @@ async function wake(on){
 }
 function enterGame(){
   const V=view();if(!V)return;
-  UI.sel=null;UI.sig={};UI.lastTick=-1;UI.pauseShown=false;UI.incSig='';
+  UI.sel=null;UI.sig={};UI.cards=new Map();$('orders').innerHTML='';UI.lastTick=-1;UI.pauseShown=false;UI.incSig='';
   $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.g,V.stageId).name+(V.busy&&V.busy!==2?`・${E.busyOf(V.busy).name}`:'');
   buildTable(V.g);
   $('feed').innerHTML='';$('incoming').classList.remove('on');$('game').classList.remove('danger');
@@ -823,42 +824,72 @@ function cardClass(V,o){
   const st=potState(myPot(V,o));if(st==='heat')cls+=' cooking';if(st==='fire')cls+=' burning';if(st==='fail')cls+=' failed';
   return cls;
 }
+// 伝票は客ごとに1つの要素を使い回し、変わった部分（見出し／鍋）だけ書き換える。
+// 毎回作り直すと登場アニメーションが再生されて画面がチカチカし、ボタンの位置もずれるため
+function cardHead(V,o,k){
+  const isName=o.mode==='name',hn=E.hintsOf(V,o,me()),p=myPot(V,o);
+  let clue,tags='',proc='',rev='';
+  if(V.g==='atom'){
+    const d=A.BYID[o.k];
+    clue=isName?`<div class="clue name">${esc(d.n)}</div>`:`<div class="clue">${esc(d.p[o.ci]||d.p[0])}</div>`;
+    tags=`<span class="tag">${isName?'名前':'性質'}</span>`;
+    if(hn>=1)rev+=isName?`元素：${Object.keys(d.m).join('・')}`:esc(d.n);
+    if(hn>=2)rev+=' / '+fmt(d.f);
+  }else{
+    const it=MENU[o.k],tg=TG[it.t]||{p:['?']},steps=stepsOf(o.k);
+    clue=isName?`<div class="clue name">${esc(nameOf(it.t))}</div>`:`<div class="clue">${esc(tg.p[o.ci]||tg.p[0])}</div>`;
+    tags=`<span class="tag">${CATNAME[it.c]}</span>${steps>1?`<span class="tag step">${steps}段階</span>`:''}`;
+    proc=it.proc?`<div class="proc">${esc(it.proc)}で</div>`:'';
+    if(hn>=1)rev+=hintHTML(V,o.k,1,o.mode);
+    if(hn>=2)rev+='<br>'+hintHTML(V,o.k,2,o.mode);
+  }
+  return `<div class="t-top"><span class="num">${k+1}</span><span class="face" data-face>${faceFor(o.left/o.total)}</span>
+      ${o.vip?'<span class="tag vip">VIP×2</span>':''}${tags}${cardWho(V,o,p)}
+      <button class="hint" data-act="hint" ${hn>=2?'disabled':''}>ヒント${hn?hn:''}</button></div>
+    <div class="c-clue">${clue}${proc}</div>${rev?`<div class="reveal">${rev}</div>`:''}`;
+}
+function headSig(V,o,k){
+  const who=V.mode==='coop'?V.order.map(q=>q!==me()&&V.players[q].focus===o.id?q:'').join(','):
+    V.mode==='versus'?V.order.map(q=>{const op=o.pots[q];return q===me()||!op?'':potState(op)+op.items.length;}).join(','):'';
+  return [k,o.mode,E.hintsOf(V,o,me()),who,V.coef].join('|');
+}
+function potCardSig(V,o){
+  const mates=V.mode==='coop'?V.order.filter(q=>q!==me()).map(q=>potSig(o.pots[q])+(V.players[q].focus===o.id?'f':'')+(V.players[q].left?'x':'')).join(','):'';
+  return potSig(myPot(V,o))+'|'+mates+'|'+(o.id===UI.sel)+'|'+V.auto;
+}
 function renderOrders(V){
   const slots=Math.max(V.mode==='solo'?3:4,V.max);
   const box=$('orders');box.style.setProperty('--slots',slots);setOrderCols(box,slots);
   const mc=colorOf(V,me());
-  let h='';
+  if(!UI.cards)UI.cards=new Map();
+  const els=[],keep=new Set();
   for(let k=0;k<slots;k++){
     const o=V.orders[k];
-    if(!o){h+=`<div class="ticket empty"></div>`;continue;}
-    const isName=o.mode==='name',hn=E.hintsOf(V,o,me()),p=myPot(V,o);
-    let clue,tags='',proc='',rev='';
-    if(V.g==='atom'){
-      const d=A.BYID[o.k];if(!d){h+=`<div class="ticket empty"></div>`;continue;}
-      clue=isName?`<div class="clue name">${esc(d.n)}</div>`:`<div class="clue">${esc(d.p[o.ci]||d.p[0])}</div>`;
-      tags=`<span class="tag">${isName?'名前':'性質'}</span>`;
-      if(hn>=1)rev+=isName?`元素：${Object.keys(d.m).join('・')}`:esc(d.n);
-      if(hn>=2)rev+=' / '+fmt(d.f);
-    }else{
-      const it=MENU[o.k];if(!it){h+=`<div class="ticket empty"></div>`;continue;}
-      const tg=TG[it.t]||{p:['?']},steps=stepsOf(o.k);
-      clue=isName?`<div class="clue name">${esc(nameOf(it.t))}</div>`:`<div class="clue">${esc(tg.p[o.ci]||tg.p[0])}</div>`;
-      tags=`<span class="tag">${CATNAME[it.c]}</span>${steps>1?`<span class="tag step">${steps}段階</span>`:''}`;
-      proc=it.proc?`<div class="proc">${esc(it.proc)}で</div>`:'';
-      if(hn>=1)rev+=hintHTML(V,o.k,1,o.mode);
-      if(hn>=2)rev+='<br>'+hintHTML(V,o.k,2,o.mode);
+    const ok=o&&(V.g==='atom'?A.BYID[o.k]:MENU[o.k]);
+    const key=ok?'o'+o.id:'e'+k;keep.add(key);
+    let c=UI.cards.get(key);
+    if(!c){
+      const el=document.createElement('div');
+      if(ok){
+        el.className='ticket card enter';el.dataset.o=o.id;
+        el.innerHTML='<div class="c-head"></div><div class="c-pot"></div><div class="tbar"><i data-bar></i></div>';
+        el.addEventListener('animationend',e=>{if(e.animationName==='slidein')el.classList.remove('enter');});
+      }else el.className='ticket empty';
+      c={el,cls:null,head:null,pot:null};UI.cards.set(key,c);
     }
-    h+=`<div class="${cardClass(V,o)}" data-o="${o.id}" style="--mc:${mc}">
-      <div class="t-top"><span class="num">${k+1}</span><span class="face" data-face>${faceFor(o.left/o.total)}</span>
-        ${o.vip?'<span class="tag vip">VIP×2</span>':''}${tags}${cardWho(V,o,p)}
-        <button class="hint" data-act="hint" ${hn>=2?'disabled':''}>ヒント${hn?hn:''}</button></div>
-      <div class="c-clue">${clue}${proc}</div>${rev?`<div class="reveal">${rev}</div>`:''}
-      ${potInner(V,o,p)}
-      ${mateRows(V,o)}
-      <div class="c-btns">${cardBtns(V,o,p)}</div>
-      <div class="tbar"><i data-bar></i></div></div>`;
+    if(ok){
+      const cls=cardClass(V,o);
+      if(c.cls!==cls){c.cls=cls;const extra=['enter','low'].filter(x=>c.el.classList.contains(x));c.el.className=cls+(extra.length?' '+extra.join(' '):'');}
+      c.el.style.setProperty('--mc',mc);
+      const hs=headSig(V,o,k);if(c.head!==hs){c.head=hs;c.el.children[0].innerHTML=cardHead(V,o,k);}
+      const ps=potCardSig(V,o);if(c.pot!==ps){c.pot=ps;const p=myPot(V,o);c.el.children[1].innerHTML=potInner(V,o,p)+mateRows(V,o)+`<div class="c-btns">${cardBtns(V,o,p)}</div>`;}
+    }
+    els.push(c.el);
   }
-  box.innerHTML=h;
+  for(const key of [...UI.cards.keys()])if(!keep.has(key))UI.cards.delete(key);
+  const cur=box.children;let same=cur.length===els.length;
+  if(same)for(let i=0;i<els.length;i++)if(cur[i]!==els[i]){same=false;break;}
+  if(!same)box.replaceChildren(...els);
 }
 // 棚の空きに「いまタップすると入る先」を表示
 function sigTarget(V){const o=V.orders.find(x=>x.id===UI.sel);return UI.sel+'|'+(o?V.orders.indexOf(o)+'|'+o.mode+E.hintsOf(V,o,me()):'-');}

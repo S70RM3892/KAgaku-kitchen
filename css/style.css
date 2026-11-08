@@ -673,3 +673,9 @@ body.mono .pt-legend{visibility:hidden}
 .mate .ms.heat{color:#9a6500}
 .mate .ms.fail,.mate .ms.fire{color:var(--hot)}
 .pc .sel{font-family:var(--font-display);font-weight:400;font-size:11px;color:var(--pc);margin-left:2px}
+
+/* 伝票：登場アニメーションは最初の1回だけ */
+.ticket{animation:none}
+.ticket.enter{animation:slidein .35s cubic-bezier(.2,1.6,.4,1)}
+.ticket.low{animation:shake .25s infinite}
+.ticket.card .c-head,.ticket.card .c-pot{display:contents}
