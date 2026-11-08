@@ -772,3 +772,38 @@ body.ui-port.fs-l .orders.big{--fsk:1.55}
 body.ui-port .orders.big .t-top{font-size:14px}
 body.ui-port .orders.big .t-top .hint{font-size:13px;padding:2px 8px}
 #rotate .btn{min-width:0;flex:0 1 auto;font-size:14px;white-space:nowrap}
+
+/* =================== 官能基モード =================== */
+.seg.gsel{grid-template-columns:repeat(3,minmax(0,1fr))}
+.gsel button{font-size:15px;padding:8px 4px}
+.gsel button small{font-size:10px;line-height:1.25}
+/* 段階のタグ（基礎→京大） */
+.lvl{display:inline-block;font-family:var(--font-body);font-weight:800;font-size:10px;line-height:15px;padding:0 5px;border-radius:5px;margin-right:6px;border:1.5px solid var(--ink);vertical-align:2px;color:var(--ink)}
+.lvl.lv1{background:#a5d6a7}.lvl.lv2{background:#80deea}.lvl.lv3{background:#90caf9}.lvl.lv4{background:#d1c4e9}.lvl.lv5{background:var(--hot);color:#fff}
+.lst b .lvl{font-size:9.5px}
+/* 棚：部品3段＋検出試薬1段。横持ちではマスが縦長になりすぎないよう高さを抑える */
+.ptable.rx.org .half{grid-template-rows:13px repeat(3,minmax(0,72px)) 13px minmax(0,72px);align-content:center}
+.o-alk{background:#dfe5e8}.o-aro{background:#d1c4e9}.o-uns{background:#b2ebf2}
+.o-oh{background:#90caf9}.o-cho{background:#fff59d}.o-co{background:#ffcc80}.o-cooh{background:#ff9e80}.o-coo{background:#f8bbd0}
+.o-eth{background:#c5e1a5}.o-n{background:#a5d6a7}.o-s{background:#ffab91}.o-cl{background:#e6ee9c}
+.ptable.org .cell .sym .cc{font-size:.62em;margin-top:1px}
+/* 見分けの注文 */
+.card .clue.name.pairq{-webkit-line-clamp:2;font-size:calc(14px*var(--fsk));line-height:1.2}
+.card .clue.name.pairq small{font-family:var(--font-body);font-weight:800;font-size:.75em}
+/* 図鑑：検出試薬の結果の表 */
+.ttab{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 2px;background:#fff}
+.ttab th,.ttab td{border:1px solid #12212933;padding:3px 6px;text-align:left;vertical-align:top}
+.ttab th{background:#1221290f;font-size:11.5px}
+.ttab td:first-child{font-weight:800;white-space:nowrap}
+.ttab tr.hl td{background:#2fd6a333}
+.ttab .tp{color:#c2410c}.ttab .tn{color:#7a8e96}.ttab .tq{color:#9a6500;cursor:help}
+.ttab small{display:block;font-size:10.5px;font-weight:800;color:#3c5560}
+/* 官能基モードの棚は文字の大きさをマスの幅から決めているので、縦持ちの拡大はしない */
+body.ui-port .ptable.rx.org .half .cell .sym{transform:none}
+.ptable.org .cell .sym{max-width:100%;overflow:hidden}
+.ptable.org .cell .sym .l2{display:none}
+.ptable.org .cell .sym.two .l1{display:none}
+.ptable.org .cell .sym.two .l2{display:inline;line-height:1.05}
+body.org-stack .ptable.rx.org .half{grid-template-columns:repeat(6,minmax(0,1fr))}
+/* 狭い伝票では「を見分ける試薬は？」を省く（「見分け」のタグで分かる） */
+.orders.narrow .card .proc,:where(body.ui-land) #game .orders .card .clue.pairq+.proc{display:none}

@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/chem.test.js && node tests/engine.test.js"
+    "test": "node tests/chem.test.js && node tests/engine.test.js && node tests/org.test.js"
   }
 }

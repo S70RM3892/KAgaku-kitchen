@@ -3,6 +3,7 @@
 import {RXBY,CELLS,CELLCOL,SHELF_IDS,CATS,MENU,MCOST,TG,stepsOf,routeReagents,serves,judge,durOf,usefulFor,
   fmt,fOf,nameOf,STAGES,REVIEW,poolFor,cellLabel} from './chem.js';
 import * as A from './atoms.js';
+import * as O from './org.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
 export const ROT_SEC=40;      // 協力：棚替えの間隔
 export const REQ_LIFE=15;     // 協力：リクエストの寿命
@@ -11,10 +12,13 @@ export const STAMPS=['まかせて！','手伝って！','ナイス！','ごめ�
 export const FX_NAME=['','煙幕','在庫切れ','引火','大惨事'];
 export const fxName=p=>FX_NAME[Math.min(4,Math.max(1,p))];
 
-/* ---------- ルールセット：反応式モード(rx)／組成モード(atom) ---------- */
+/* ---------- ルールセット：反応式モード(rx)／組成モード(atom)／官能基モード(org) ---------- */
 // 協力・対戦・通信の仕組みは共通で、棚・判定・得点だけをモードごとに切り替える
 // 組成モードの棚は本物の周期表（18族）。協力の担当は族ごと（2人なら奇数族と偶数族）
 const AEL={};A.PT.forEach(e=>{AEL[e.s]=e.g-1;});
+// 官能基モードの棚：骨格（左）・官能基（右）・検出試薬（最下段）。協力の担当は2人なら「骨格」と「官能基」に分かれる
+const OCELLS=[...O.SK,...O.FG,...O.TIDS.map(t=>'@'+t)],OCOL={};
+O.SK.forEach((k,i)=>OCOL[k]=(i%2)*2);O.FG.forEach((k,i)=>OCOL[k]=1+(i%2)*2);O.TIDS.forEach((t,i)=>OCOL['@'+t]=i%4);
 const has=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);
 export const costOf=k=>MCOST[k]||3;
 export function orderLife(k,mode){
@@ -44,8 +48,30 @@ export const RULES={
     lockPool:k=>Object.keys(A.BYID[k].m),lockSkip:['H','O','C'],lockFill:()=>['N','S','Cl','Na','K','Ca'],
     maxCoef:40,maxSpecies:12,label:k=>k,dark:'停電！ 周期表の位置で元素を探せ',rot:'担当の族が入れ替わった',
   },
+  org:{
+    stages:O.STAGES,review:O.REVIEW,cells:OCELLS,col:OCOL,
+    pool:st=>st.pool==='review'?O.ALL.slice():st.pool.slice(),
+    valid:k=>typeof k==='string'&&(k[0]==='@'?has(O.TEST,k.slice(1)):has(O.PART,k)),
+    known:O.known,tgt:O.tgt,
+    nclue:k=>O.isPair(k)?1:O.BYID[k].p.length,
+    base:k=>O.isPair(k)?10+2*O.PAIR[k].lv:6+3*O.BYID[k].np+2*(O.BYID[k].lv-1),
+    life:(k,m)=>O.isPair(k)?32:Math.min(70,Math.max(30,24+5*O.BYID[k].np+(m==='prop'?10:0))),
+    power:k=>O.isPair(k)?Math.floor(O.PAIR[k].lv/3):Math.floor((O.BYID[k].np+O.BYID[k].lv)/4),
+    lockPool:k=>O.isPair(k)?[]:Object.keys(O.BYID[k].parts),lockSkip:[],lockFill:()=>O.PARTS.map(p=>p.id),
+    maxCoef:3,maxSpecies:6,label:O.label,dark:'停電！ 棚の位置で部品を探せ',rot:'担当の部品が入れ替わった',
+    // 官能基モードだけが使うフック（他のモードには無いので従来どおり動く）
+    accept:(o,k)=>O.accept(o.k,k),                       // この注文に入れられる物か（理由の文字列を返すと拒否）
+    would:(S,o,p)=>O.exact(o.k,p.items),                 // 自動精製：部品がちょうどそろった
+    instant:(S,o,p)=>O.isPair(o.k)&&!!p.cat,             // 見分けの注文は試薬を選んだ瞬間に判定（総当たり防止）
+    start:(S,o,p)=>{
+      if(O.isPair(o.k)){p.res={pair:O.judgePair(o.k,p.cat)};p.dur=0.8;}
+      else{p.res={build:O.judgeBuild(o.k,p.items)};p.dur=0.5+0.12*p.items.reduce((a,x)=>a+x[1],0);}
+    },
+    finish:(S,o,key,p)=>finishOrg(S,o,key,p),
+    tail:(k,note)=>O.isPair(k)?`<small>${note||'正解：'+O.answerText(k)}</small>`:null,
+  },
 };
-export const GAMES={rx:'反応式モード',atom:'組成モード'};
+export const GAMES={rx:'反応式モード',atom:'組成モード',org:'官能基モード'};
 // 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
 export const BUSY=[null,
   {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},
@@ -88,7 +114,7 @@ const orderById=(S,id)=>S.orders.find(o=>o.id===id);
 
 // cfg: {g:'rx'|'atom', mode:'solo'|'coop'|'versus', stageId, players:[{id,name,slot}], split, coef, busy, weights:{key:box}, pool:[key]}
 export function createGame(cfg){
-  const g=cfg.g==='atom'?'atom':'rx',R=RULES[g];
+  const g=has(RULES,cfg.g)?cfg.g:'rx',R=RULES[g];
   const busy=Math.min(5,Math.max(1,(cfg.busy|0)||2)),B=BUSY[busy];
   const st=stageById(g,cfg.stageId);
   const mode=cfg.mode,pids=cfg.players.map(p=>p.id),n=pids.length;
@@ -172,8 +198,8 @@ export function tick(S,dt){
   for(let i=S.orders.length-1;i>=0;i--){
     const o=S.orders[i];o.left-=dt;
     if(o.left>0)continue;
-    removeOrder(S,o);const T=RU(S).tgt(o.k);
-    const tail=`<small>${T.n} = ${fmt(T.f)}</small>`;
+    removeOrder(S,o);const R=RU(S),T=R.tgt(o.k);
+    const tail=(R.tail&&R.tail(o.k,null))||`<small>${T.n} = ${fmt(T.f)}</small>`;
     if(vs)emit(S,'*',{h:`時間切れ${tail}`,k:'ng',s:'expire',m:[o.k,'exp']});
     else{
       const pen=S.bexp??10;
@@ -242,6 +268,7 @@ function failText(S,res){return res.lv<=S.fb?res.why:'反応しない';}
 // 反応が終わったら判定。客の注文どおりなら自動で提供、途中の中間体なら鍋に残して次へ、違う物なら −5
 function finishPot(S,o,key,p){
   p.t=0;
+  if(RU(S).finish){RU(S).finish(S,o,key,p);return;}
   const T=RU(S).tgt(o.k);
   if(S.g==='atom'){
     const m=(p.res&&p.res.comp)||{},k=A.keyOf(m),hits=A.BYKEY[k];
@@ -268,8 +295,25 @@ function finishPot(S,o,key,p){
   const why=it.via&&x.main===it.t?`製法が違う（${it.proc}で作る）`:`正解：${T.n} = ${fmt(T.f)}`;
   mistake(S,o,key,p,x.main,fOf(x.main),why,x.id);
 }
+// 官能基モード：組み立て（部品がそろえば提供・別の化合物なら −5・存在しない組み合わせは失敗）／見分け（試薬で結果が分かれれば提供）
+function finishOrg(S,o,key,p){
+  const r=p.res||{},T=RU(S).tgt(o.k);
+  if(r.pair){
+    const j=r.pair,t=O.TEST[p.cat];
+    if(j.ok){autoServe(S,o,key,p,[],null,j.line);return;}
+    mistake(S,o,key,p,t?t.label:'?','',j.why,null,{head:'見分けられない',fail:`${j.why}（${j.line}）`,
+      small:`${j.line}｜正解例：${O.answerText(o.k)}`,logWhy:'見分け失敗'});
+    return;
+  }
+  const j=r.build||{};
+  if(j.ok){autoServe(S,o,key,p,[],null);return;}
+  if(j.wrong){mistake(S,o,key,p,j.wrong.n,j.wrong.f,`正解：${T.n} = ${fmt(T.f)}`);return;}
+  const why=j.lv<=S.fb?j.why:(S.fb>=1&&j.generic?j.generic:'その組み合わせの化合物は無い');
+  p.state='fail';p.fail={why};
+  emitPot(S,key,{h:`組めない<small>${why}</small>`,k:'ng',s:'fail'});
+}
 function creditOf(S,key,p){if(key!=='*')return S.players[key]?key:S.order[0];return p.rb&&S.players[p.rb]?p.rb:S.order[0];}
-function autoServe(S,o,key,p,overList,rx){
+function autoServe(S,o,key,p,overList,rx,note){
   const vs=S.mode==='versus',pid=creditOf(S,key,p),P=S.players[pid],R=RU(S),T=R.tgt(o.k);
   const C=vs?P:S.team,contrib=Object.keys(p.by);
   const hints=hintsOf(S,o,pid),over=overList.length>0;
@@ -284,7 +328,7 @@ function autoServe(S,o,key,p,overList,rx){
   S.log.push({k:o.k,ok:true,hinted:hints>0,over:overList,rx,ci:o.ci,mode:o.mode,by:pid});
   const mk=hints||over?'okh':'ok';
   (S.mode==='coop'?[...new Set([pid,...contrib])]:[pid]).forEach(q=>emit(S,q,{m:[o.k,mk]}));
-  const tail=`<small>${fmt(T.f)} ${T.n}${T.proc?`（${T.proc}）`:''}</small>`;
+  const tail=(R.tail&&R.tail(o.k,note))||`<small>${fmt(T.f)} ${T.n}${T.proc?`（${T.proc}）`:''}</small>`;
   const extra=(team?' 連携！':'')+(over?`（${overList.join('・')}：×0.7）`:'');
   emit(S,pid,{h:`提供 +${pts}${mult>1?`（チップ×${mult}）`:''}${extra}${tail}`,k:'ok',s:'ok'});
   S.order.filter(q=>q!==pid).forEach(q=>{
@@ -293,14 +337,15 @@ function autoServe(S,o,key,p,overList,rx){
   });
   if(vs)sendAttack(S,P,attackPower(S,o.k,o.vip,P.combo,S.rush));
 }
-function mistake(S,o,key,p,madeLabel,madeF,why,rx){
+function mistake(S,o,key,p,madeLabel,madeF,why,rx,opt){
   const vs=S.mode==='versus',pid=creditOf(S,key,p),P=S.players[pid],C=vs?P:S.team;
   C.score=Math.max(0,C.score-5);C.combo=0;C.failed++;if(!vs)P.failed++;
   const contrib=Object.keys(p.by);
   (S.mode==='coop'?[...new Set([pid,...contrib])]:[pid]).forEach(q=>emit(S,q,{m:[o.k,'ng']}));
-  S.log.push({k:o.k,ok:false,why:'ちがう物',given:S.g==='atom'?madeLabel:rx,ci:o.ci,mode:o.mode,by:pid});
-  p.state='fail';p.fail={why:`${S.g==='atom'?madeLabel:fOf(madeLabel)} ができた（注文とちがう）`,made:madeF,label:madeLabel};
-  emitPot(S,key,{h:`ちがう物ができた −5<small>${fmt(S.g==='atom'?madeLabel:madeF)}｜${why}</small>`,k:'ng',s:'ng'});
+  S.log.push({k:o.k,ok:false,why:(opt&&opt.logWhy)||'ちがう物',given:S.g==='rx'?rx:madeLabel,ci:o.ci,mode:o.mode,by:pid});
+  p.state='fail';p.fail={why:(opt&&opt.fail)||`${S.g==='rx'?fOf(madeLabel):madeLabel} ができた（注文とちがう）`,made:madeF,label:madeLabel};
+  const small=opt&&opt.small!=null?opt.small:`${fmt(S.g==='atom'?madeLabel:madeF)}｜${why}`;
+  emitPot(S,key,{h:`${(opt&&opt.head)||'ちがう物ができた'} −5<small>${small}</small>`,k:'ng',s:'ng'});
 }
 function ignite(S,o,key,p){
   resetPot(p);p.state='fire';
@@ -354,16 +399,24 @@ function putIn(S,p,k,pid){
 // 自動精製：材料と条件がそろって「この客に出せる物（または途中の中間体）」ができる状態になったら自動で反応させる
 function wouldWork(S,o,p){
   if(!p.items.length)return false;
+  if(RU(S).would)return RU(S).would(S,o,p);
   if(S.g==='atom'){const m={};p.items.forEach(([s,c])=>m[s]=c);return !!A.BYID[o.k]&&A.keyOf(m)===A.BYID[o.k].k;}
   const r=judge(p.items,p.cat,p.heat,S.coef);if(!r.ok)return false;
   return serves(o.k,r.rx)||usefulFor(o.k).has(RXBY[r.rx].main);
 }
-function startReact(S,p,pid){
-  if(S.g==='atom'){const m={};p.items.forEach(([s,c])=>m[s]=c);p.res={comp:m};p.dur=0.9+0.05*A.atomCount(m);}
+function startReact(S,p,pid,o){
+  if(RU(S).start&&o)RU(S).start(S,o,p);
+  else if(S.g==='atom'){const m={};p.items.forEach(([s,c])=>m[s]=c);p.res={comp:m};p.dur=0.9+0.05*A.atomCount(m);}
   else{p.res=judge(p.items,p.cat,p.heat,S.coef);p.dur=durOf(p.items,p.heat,p.cat);}
   p.state='heat';p.t=0;p.rb=pid;
 }
-function maybeAuto(S,o,p,pid){if(S.auto&&o&&p&&p.state==='idle'&&wouldWork(S,o,p)){startReact(S,p,pid);emit(S,pid,{s:'react'});}}
+function maybeAuto(S,o,p,pid){
+  if(!o||!p||p.state!=='idle')return;
+  const R=RU(S);
+  // 見分けの注文：試薬を選んだ瞬間に判定（自動精製の設定に関係なく）
+  if(R.instant&&R.instant(S,o,p)){startReact(S,p,pid,o);emit(S,pid,{s:'react'});return;}
+  if(S.auto&&wouldWork(S,o,p)){startReact(S,p,pid,o);emit(S,pid,{s:'react'});}
+}
 // 操作対象の鍋（a.o = 注文ID）
 function myPot(S,pid,a,need){
   const o=orderById(S,a.o);if(!o)return null;
@@ -372,13 +425,14 @@ function myPot(S,pid,a,need){
 }
 const ACT={
   add(S,pid,P,a){
-    const k=a.s;if(!RU(S).valid(k))return;
+    const k=a.s,R=RU(S);if(!R.valid(k))return;
     if(isLocked(S,pid,k)){emit(S,pid,{h:`${fmt(RU(S).label(k))} は在庫切れ`,k:'ng',s:'lock'});return;}
     const own=owners(S);
     if(own&&own[k]!==pid){
       // 自分の担当外 → 担当者にリクエスト（入れ先は自分が選んでいる客の鍋）
       const t=myPot(S,pid,a,true);
       if(!t||t.p.state!=='idle'){emit(S,pid,{h:'客を選んでから頼もう',k:'ng',s:'lock'});return;}
+      const no=R.accept&&R.accept(t.o,k);if(no){emit(S,pid,{h:no,k:'ng',s:'lock'});return;}
       if(S.reqs.filter(r=>r.from===pid).length>=8){emit(S,pid,{h:'リクエストは8個まで',k:'ng',s:'lock'});return;}
       S.reqs.push({id:++S.uid,from:pid,to:own[k],s:k,o:t.o.id,t:S.elapsed});
       emit(S,own[k],{s:'req'});
@@ -392,6 +446,7 @@ const ACT={
     }
     if(!tgt){tgt=myPot(S,pid,a,true);if(!tgt){emit(S,pid,{h:'客（伝票）を選んでから入れよう',k:'ng',s:'lock'});return;}}
     if(tgt.p.state!=='idle'){emit(S,pid,{h:tgt.p.state==='heat'?'その鍋は反応中':'先に鍋を空けよう',k:'ng',s:'lock'});return;}
+    const no=R.accept&&R.accept(tgt.o,k);if(no){emit(S,pid,{h:no,k:'ng',s:'lock'});return;}
     if(!putIn(S,tgt.p,k,pid))return;
     P.atoms++;
     if(rq){S.reqs.splice(S.reqs.indexOf(rq),1);emit(S,rq.from,{s:'gift'});}
@@ -416,7 +471,7 @@ const ACT={
   react(S,pid,P,a){
     const t=myPot(S,pid,a,false);if(!t)return;const p=t.p;
     if(p.state!=='idle'||!p.items.length)return;
-    startReact(S,p,pid);
+    startReact(S,p,pid,t.o);
   },
   dump(S,pid,P,a){
     const t=myPot(S,pid,a,false);if(!t||t.p.state==='fire'||t.p.state==='heat')return;
