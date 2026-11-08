@@ -21,12 +21,16 @@
 
   <!-- タイトル -->
   <section id="title" class="screen on" aria-label="タイトル">
-    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。遊び方は4つから選べる。<span class="land">📱 <b>横持ち・縦持ち</b>どちらでも遊べる（⚙設定で固定もできる）</span></small></h1>
+    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。化学4モード＋英語3モードから選べる。<span class="land">📱 <b>横持ち・縦持ち</b>どちらでも遊べる（⚙設定で固定もできる）</span></small></h1>
+    <div class="seg subj" id="titleSubj" role="group" aria-label="科目"><button data-subj="chem">🧪 化学</button><button data-subj="eng">🔤 英語</button></div>
     <div class="seg gsel" id="titleGame" role="group" aria-label="ゲームモード">
       <button data-g="rx">反応式モード<small>試薬・触媒・加熱で反応を組む</small></button>
       <button data-g="atom">組成モード<small>周期表の元素で分子式を組む</small></button>
       <button data-g="org">官能基モード<small>部品で有機化合物・検出反応</small></button>
       <button data-g="ion">無機イオンモード<small>イオンで酸・塩基・塩・錯イオン・半反応式</small></button>
+      <button data-g="eroot">語根モード<small>接頭辞・語根・接尾辞で単語を組む</small></button>
+      <button data-g="esyn">構文モード<small>構文の語句を正しい順に並べる</small></button>
+      <button data-g="eword">見分けモード<small>紛らわしい2語から空所の語を選ぶ</small></button>
     </div>
 
     <div class="mp-card">
@@ -73,7 +77,8 @@
     <div class="lob-sec"><h4>プレイヤー <span id="lobCount"></span></h4><div class="lob-players" id="lobPlayers"></div></div>
     <div class="lob-sec">
       <h4>ゲーム</h4>
-      <div class="seg gsel" id="lobGame"><button data-g="rx">反応式モード<small>試薬・触媒・加熱</small></button><button data-g="atom">組成モード<small>元素から分子式</small></button><button data-g="org">官能基モード<small>部品・検出反応</small></button><button data-g="ion">無機イオンモード<small>イオン・半反応式</small></button></div>
+      <div class="seg subj" id="lobSubj"><button data-subj="chem">🧪 化学</button><button data-subj="eng">🔤 英語</button></div>
+      <div class="seg gsel" id="lobGame"><button data-g="rx">反応式モード<small>試薬・触媒・加熱</small></button><button data-g="atom">組成モード<small>元素から分子式</small></button><button data-g="org">官能基モード<small>部品・検出反応</small></button><button data-g="ion">無機イオンモード<small>イオン・半反応式</small></button><button data-g="eroot">語根モード<small>接頭辞・語根・接尾辞</small></button><button data-g="esyn">構文モード<small>語句を並べる</small></button><button data-g="eword">見分けモード<small>紛らわしい2語</small></button></div>
     </div>
     <div class="lob-sec">
       <h4>協力／対戦</h4>

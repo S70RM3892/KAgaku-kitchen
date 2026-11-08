@@ -5,6 +5,7 @@ import {RXBY,CELLS,CELLCOL,SHELF_IDS,CATS,MENU,MCOST,TG,stepsOf,routeReagents,se
 import * as A from './atoms.js';
 import * as O from './org.js';
 import * as I from './ion.js';
+import {ROOTM,SYNM,WORDM} from './eng.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
 export const ROT_SEC=40;      // 協力：棚替えの間隔
 export const REQ_LIFE=15;     // 協力：リクエストの寿命
@@ -96,7 +97,35 @@ export const RULES={
     tail:(k,note)=>I.isHalf(k)?`<small>${note||'正解：'+I.answerText(k)}</small>`:`<small>${I.disp(k)} ${I.BYID[k].n}</small>`,
   },
 };
-export const GAMES={rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード'};
+// 英語の3モード（語根・構文・見分け）：部品で組む仕組みを共有する。化学のモードには影響しない
+function engRules(M,o){
+  const cells=[...M.SHELF.L.main,...M.SHELF.L.bottom,...M.SHELF.R.main,...M.SHELF.R.bottom],col={};
+  // 2人なら左の棚と右の棚で担当が分かれる
+  M.SHELF.L.main.concat(M.SHELF.L.bottom).forEach((k,i)=>col[k]=(i%2)*2);
+  M.SHELF.R.main.concat(M.SHELF.R.bottom).forEach((k,i)=>col[k]=1+(i%2)*2);
+  const np=k=>M.BYID[k].np,lv=k=>M.BYID[k].lv;
+  return {
+    stages:M.STAGES,review:M.REVIEW,cells,col,
+    pool:st=>st.pool==='review'?M.ALL.slice():st.pool.slice(),
+    valid:k=>typeof k==='string'&&has(M.PART,k),
+    known:M.known,tgt:M.tgt,nclue:M.nclue,
+    base:k=>6+2*np(k)+2*(lv(k)-1),
+    life:(k,m)=>Math.min(60,Math.max(24,(o.life||20)+4*np(k)+(m==='prop'?6:0))),
+    power:k=>Math.floor((np(k)+lv(k))/4),
+    lockPool:k=>Object.keys(M.BYID[k].parts||{}),lockSkip:[],lockFill:()=>cells.slice(),
+    maxCoef:1,maxSpecies:6,label:M.label,dark:'停電！ 棚の位置で探せ',rot:'担当の棚が入れ替わった',
+    accept:(ord,k)=>M.accept(ord.k,k),
+    would:(S,ord,p)=>M.exact(ord.k,p.items),
+    instant:M.instant?(S,ord,p)=>M.instant(p.items):undefined,
+    start:(S,ord,p)=>{p.res=M.judgePick?{pick:M.judgePick(ord.k,p.items)}:{build:M.judgeBuild(ord.k,p.items)};p.dur=M.judgePick?0.6:0.4+0.1*p.items.length;},
+    finish:(S,ord,key,p)=>finishParts(S,ord,key,p,M),
+    tail:(k,note)=>M.tail(k,note),
+  };
+}
+RULES.eroot=engRules(ROOTM,{life:20});
+RULES.esyn=engRules(SYNM,{life:24});
+RULES.eword=engRules(WORDM,{life:14});
+export const GAMES={rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
 // 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
 export const BUSY=[null,
   {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},
@@ -324,6 +353,12 @@ function finishPot(S,o,key,p){
 // 見分け（試薬で結果が分かれれば提供）／半反応式（e⁻・H⁺・H₂O の数が合えば提供）
 function finishParts(S,o,key,p,M){
   const r=p.res||{},T=RU(S).tgt(o.k);
+  if(r.pick){
+    const j=r.pick;
+    if(j.ok){autoServe(S,o,key,p,[],null,j.line);return;}
+    mistake(S,o,key,p,j.given,'',j.why,null,{head:'ちがう語',fail:`${j.why}（${j.line}）`,small:`${j.why}｜${j.line}`,logWhy:'語の選び間違い'});
+    return;
+  }
   if(r.pair){
     const j=r.pair,t=O.TEST[p.cat];
     if(j.ok){autoServe(S,o,key,p,[],null,j.line);return;}

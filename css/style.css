@@ -815,3 +815,18 @@ body.ui-port .ptable.rx.parts .half .cell .sym{transform:none}
 .card .clue.name.halfq{-webkit-line-clamp:2;white-space:normal;line-height:1.2}
 .card .clue.name.halfq small{display:block;font-family:var(--font-body);font-weight:800;font-size:.62em;opacity:.8}
 .card .clue sup,.pin sup,.toast sup,.dx sup,.rev sup,h2 sup{font-size:.62em;line-height:0}
+
+/* =================== 科目の切り替え・英語モード =================== */
+.seg.subj{margin-bottom:6px}
+.seg.subj button{padding:6px;font-size:15px}
+#titleGame[data-subj="chem"] [data-g^="e"],#titleGame[data-subj="eng"] [data-g]:not([data-g^="e"]),
+#lobGame[data-subj="chem"] [data-g^="e"],#lobGame[data-subj="eng"] [data-g]:not([data-g^="e"]){display:none}
+.ptable.rx.eng .half{grid-template-rows:13px repeat(5,minmax(0,1fr)) 13px minmax(0,1fr)}
+.e-pre{background:#ffccbc}.e-root{background:#b3e5fc}.e-suf{background:var(--ticket);border-style:dashed!important}
+.e-head{background:#ffab91}.e-word{background:#dfe5e8}.e-slot{background:var(--cool);border-style:dashed!important}
+.e-w1{background:#c5e1a5}.e-w2{background:#b3e5fc}
+.ptable.eng .cell .sym{font-family:var(--font-body);font-weight:800;letter-spacing:-.02em}
+.pin.seq{align-content:flex-start}
+.pin.seq .chip{border-bottom:3px solid var(--dc,transparent)}
+.pin.seq .arr{font-style:normal;font-weight:800;opacity:.5;margin:0 -1px}
+.card .clue u.blank{display:inline-block;min-width:3em;border-bottom:2px solid var(--ink);text-decoration:none}
