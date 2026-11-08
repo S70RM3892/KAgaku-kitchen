@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>ケミカル・キッチン</title>
-<meta name="description" content="試薬・触媒・加熱を選んで反応式を組み、注文の物質を合成する化学クッキングゲーム。友達と協力・対戦もできる。">
+<meta name="description" content="反応式を組む「反応式モード」と、元素から分子式を組む「組成モード」で遊べる化学クッキングゲーム。友達と協力・対戦もできる。">
 <meta name="theme-color" content="#16323d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,11 @@
 
   <!-- タイトル -->
   <section id="title" class="screen on" aria-label="タイトル">
-    <h1 class="logo">ケミカル・キッチン<small>試薬・触媒・加熱を選んで反応式を組み、注文の物質を作って届けろ。</small></h1>
+    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。遊び方は2つから選べる。</small></h1>
+    <div class="seg gsel" id="titleGame" role="group" aria-label="ゲームモード">
+      <button data-g="rx">反応式モード<small>試薬・触媒・加熱で反応を組む</small></button>
+      <button data-g="atom">組成モード<small>周期表の元素で分子式を組む</small></button>
+    </div>
 
     <div class="mp-card">
       <div class="mp-h">友達と遊ぶ<span>2〜4人・それぞれのスマホ/PCで</span></div>
@@ -26,8 +30,8 @@
         <button class="btn" id="btnJoin">部屋に入る</button>
       </div>
       <div class="mp-modes">
-        <div><b>協力</b>試薬棚と触媒を分担。担当外は仲間に「リクエスト」して入れてもらう</div>
-        <div><b>対戦</b>同じ注文を早い者勝ちで奪い合う。手順の多い反応ほど強い「おじゃま」が飛ぶ</div>
+        <div><b>協力</b>棚を分担。担当外は仲間に「リクエスト」して入れてもらう</div>
+        <div><b>対戦</b>同じ注文を早い者勝ちで奪い合う。難しいものほど強い「おじゃま」が飛ぶ</div>
       </div>
     </div>
 
@@ -39,11 +43,7 @@
       <button class="btn sub" id="btnMute">音: ON</button>
       <button class="btn sub" id="btnCoef">係数判定: OFF</button>
     </div>
-    <div class="howto">
-      <b>覚えること</b>：反応物（濃・希も）、<b>加熱の有無</b>、<b>触媒の種類</b>。MnO₂や濃硫酸は「触媒のとき」と「反応物のとき」があるので要注意。工業的製法は製法名つきで注文される。<br>
-      <b>覚え方の仕組み</b>：間違えた・時間切れの反応は結果画面に反応式と条件が出て、次からよく注文される（協力・対戦でも全員の苦手を反映）。ヒント・余計な加熱/触媒では習熟★は上がらない。<br>
-      <b>係数判定</b>：ONにすると係数まで合わせないと反応しない（京大ラッシュは常にON）。
-    </div>
+    <div class="howto" id="howto"></div>
   </section>
 
   <!-- ロビー -->
@@ -62,7 +62,11 @@
     </div>
     <div class="lob-sec"><h4>プレイヤー <span id="lobCount"></span></h4><div class="lob-players" id="lobPlayers"></div></div>
     <div class="lob-sec">
-      <h4>モード</h4>
+      <h4>ゲーム</h4>
+      <div class="seg gsel" id="lobGame"><button data-g="rx">反応式モード<small>試薬・触媒・加熱</small></button><button data-g="atom">組成モード<small>元素から分子式</small></button></div>
+    </div>
+    <div class="lob-sec">
+      <h4>協力／対戦</h4>
       <div class="seg" id="lobMode"><button data-mode="coop">協力</button><button data-mode="versus">対戦</button></div>
     </div>
     <div class="howto rules" id="lobRules"></div>
@@ -70,7 +74,7 @@
       <h4>ステージ</h4>
       <div class="lob-stages" id="lobStages"></div>
       <label class="toggle" id="lobSplitRow"><input type="checkbox" id="lobSplit" checked>棚を分担する（OFFにすると全員が全試薬を使える）</label>
-      <label class="toggle"><input type="checkbox" id="lobCoef">係数も判定する（上級。京大ラッシュは常にON）</label>
+      <label class="toggle" id="lobCoefRow"><input type="checkbox" id="lobCoef">係数も判定する（上級。京大ラッシュは常にON）</label>
     </div>
     <div class="lob-foot">
       <button class="btn go" id="btnStart">開店する</button>
@@ -102,7 +106,7 @@
 
   <!-- 図鑑 -->
   <section id="dex" class="screen" aria-label="反応図鑑">
-    <div class="dex-head"><h2>反応図鑑</h2><button class="btn sub" style="flex:0 0 auto;min-width:0" id="btnDexBack">戻る</button></div>
+    <div class="dex-head"><h2 id="dexTitle">反応図鑑</h2><button class="btn sub" style="flex:0 0 auto;min-width:0" id="btnDexBack">戻る</button></div>
     <div class="dex-sum" id="dexSum"></div>
     <div class="dex-list" id="dexList"></div>
   </section>

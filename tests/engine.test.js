@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {createGame,begin,tick,apply,owners,snapshot,advance,results,playerLeft,attackPower} from '../js/engine.js';
 import {MENU,MKEYS,route,SHELF_IDS,RXBY} from '../js/chem.js';
+import {BYID,DB} from '../js/atoms.js';
 
 const P2=[{id:'p0',name:'A',slot:0},{id:'p1',name:'B',slot:1}];
 const settle=(S,f)=>{for(let i=0;i<200&&f.state==='heat';i++)tick(S,0.05);};
@@ -99,7 +100,7 @@ function force(S,key){if(!S.orders.length)tick(S,0.01);const o=S.orders[0];o.k=k
   if(other&&MENU[other.k].t!=='CO2'){apply(S,'p1',{t:'serve',f:fb.id,o:other.id});assert.ok(other.ban.p1);step(S,'p1',fb,RXBY.co2_lab);}
   apply(S,'p0',{t:'serve',f:fa.id,o:o.id});assert.ok(S.players.p0.score>0);
   apply(S,'p1',{t:'serve',f:fb.id,o:o.id});assert.equal(fb.state,'ready','kept after snipe');
-  assert.equal(S.players.p1.inc.length,1);assert.equal(S.players.p1.inc[0].pow,attackPower('CO2',false,1,false));
+  assert.equal(S.players.p1.inc.length,1);assert.equal(S.players.p1.inc[0].pow,attackPower(S,'CO2',false,1,false));
   const o2=force(S,'CO2');apply(S,'p1',{t:'serve',f:fb.id,o:o2.id});
   assert.equal(S.players.p1.inc.length,0,'offset');
   console.log('versus ok',S.players.p0.score,S.players.p1.score);
@@ -145,5 +146,56 @@ for(const mode of ['solo','coop','versus'])for(const st of ['s1','s2','s3','s4',
   const r=results(S);JSON.stringify(r);
   const sc=mode==='versus'?r.players.map(p=>p.score).join('/'):r.team.score;
   console.log(`sim ${mode}/${st}: score=${sc} served=${mode==='versus'?r.players.map(p=>p.served).join('/'):r.team.served} snap=${JSON.stringify(snapshot(S)).length}B`);
+}
+// ================= 組成モード =================
+const comp=id=>Object.entries(BYID[id].m);
+function fillA(S,pid,f,id){for(const [s,c] of comp(id))for(let i=0;i<c;i++)apply(S,pid,{t:'add',s,f:f.id});}
+function cookA(S,pid,f,id){fillA(S,pid,f,id);apply(S,pid,{t:'react',f:f.id});settle(S,f);}
+{
+  const S=createGame({g:'atom',mode:'solo',stageId:'s1',players:[{id:'p0',name:'me'}]});begin(S);
+  assert.equal(S.g,'atom');
+  const o=force(S,'H2O');const f=S.flasks[0];
+  apply(S,'p0',{t:'add',s:'H2O',f:f.id});assert.equal(f.items.length,0,'reagent keys invalid in atom mode');
+  apply(S,'p0',{t:'heat',f:f.id,h:1});assert.equal(f.heat,0,'no heat dial in atom mode');
+  cookA(S,'p0',f,'H2O');assert.equal(f.state,'ready');
+  apply(S,'p0',{t:'serve',f:f.id,o:o.id});assert.ok(S.team.score>0);
+  // レシピに無い組成は失敗作
+  const g=S.flasks[1];['H','H','H'].forEach(s=>apply(S,'p0',{t:'add',s,f:g.id}));apply(S,'p0',{t:'react',f:g.id});settle(S,g);
+  assert.equal(g.state,'fail');assert.match(g.fail.why,/レシピに無い/);
+  console.log('atom solo ok',S.team.score);
+}
+{
+  const S=createGame({g:'atom',mode:'coop',stageId:'s1',players:P2,split:true});begin(S);
+  const own=owners(S);assert.notEqual(own.H,own.O,'H and O split');
+  const f=S.flasks[0];
+  apply(S,own.O,{t:'add',s:'H',f:f.id});apply(S,own.O,{t:'add',s:'H',f:f.id});assert.equal(S.reqs.length,2);
+  apply(S,own.H,{t:'add',s:'H',f:S.flasks[1].id});apply(S,own.H,{t:'add',s:'H',f:S.flasks[1].id});
+  assert.deepEqual(f.items,[['H',2,0]]);
+  console.log('atom coop ok');
+}
+{
+  const S=createGame({g:'atom',mode:'versus',stageId:'s1',players:P2});begin(S);
+  const o=force(S,'CO2');const fa=S.flasks.find(f=>f.owner==='p0'),fb=S.flasks.find(f=>f.owner==='p1');
+  cookA(S,'p0',fa,'CO2');cookA(S,'p1',fb,'CO2');
+  apply(S,'p0',{t:'serve',f:fa.id,o:o.id});assert.ok(S.players.p0.score>0);
+  assert.equal(S.players.p1.inc[0].pow,attackPower(S,'CO2',false,1,false));
+  console.log('atom versus ok');
+}
+for(const mode of ['solo','coop','versus'])for(const st of ['s1','s3','s5','rv']){
+  const players=mode==='solo'?[{id:'p0',name:'x'}]:[...P2];
+  const S=createGame({g:'atom',mode,stageId:st,players,pool:st==='rv'?DB.slice(0,10).map(d=>d.id):null});begin(S);
+  let n=0;
+  while(!S.over&&n<20000){
+    tick(S,0.05);n++;
+    if(n%30===0&&S.orders.length){
+      const pid=players[n%players.length].id;
+      const f=S.flasks.find(x=>(x.owner==null||x.owner===pid)&&x.state==='idle');
+      if(f){cookA(S,pid,f,S.orders[0].d||S.orders[0].k);if(f.state==='ready')apply(S,pid,{t:'serve',f:f.id,o:S.orders[0].id});}
+      S.flasks.forEach(x=>{if(x.state==='fire')for(let i=0;i<4;i++)apply(S,pid,{t:'ext',f:x.id});else if(x.state==='fail')apply(S,pid,{t:'dump',f:x.id});});
+    }
+    S.ev.length=0;
+  }
+  assert.ok(S.over);
+  console.log(`atom sim ${mode}/${st}: served=${S.team.served+Object.values(S.players).reduce((a,p)=>a+(mode==='versus'?p.served:0),0)}`);
 }
 console.log('ALL PASS');

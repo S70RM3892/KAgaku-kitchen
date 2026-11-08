@@ -1,25 +1,39 @@
 // 画面・入力・音・セッション（ソロ／ホスト／参加者）
-import {SUB,RXBY,MENU,MKEYS,TG,CATNAME,STAGES,REVIEW,SHELF,CATS,HEAT,route,eqHTML,condText,nameOf,fOf,cellLabel,cellName,stepsOf,fmt} from './chem.js';
+import {SUB,RXBY,MENU,MKEYS,TG,CATNAME,SHELF,CATS,HEAT,route,eqHTML,condText,nameOf,fOf,cellLabel,cellName,stepsOf,fmt} from './chem.js';
+import * as A from './atoms.js';
 import * as E from './engine.js';
 import {HostNet,ClientNet,PROTO,normCode} from './net.js';
 const {COLORS,FL,STAMPS}=E;
 
 /* ================= 保存 ================= */
-// v2：反応式モード。旧版(v1)からは名前・音・対戦成績だけ引き継ぐ
+// モードごとに習熟度・ベストを分けて持つ。rx=反応式モード、atom=組成モード（旧版 v1 の記録を引き継ぐ）
 const SAVE_KEY='chem-kitchen-v2';
-let SAVE={mastery:{},best:{},mute:false,tut:false,name:'',coBest:{},vs:{win:0,lose:0,draw:0},coef:false};
+const blankRec=()=>({mastery:{},best:{},coBest:{}});
+let SAVE={name:'',mute:false,tut:false,tutA:false,coef:false,g:'rx',vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
-  if(s)SAVE=Object.assign(SAVE,s);
-  else{const o=JSON.parse(localStorage.getItem('chem-kitchen-v1')||'null');if(o)Object.assign(SAVE,{name:o.name||'',mute:!!o.mute,vs:o.vs||SAVE.vs});}
+  if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
+  else if(s)Object.assign(SAVE,{name:s.name||'',mute:!!s.mute,tut:!!s.tut,coef:!!s.coef,vs:s.vs||SAVE.vs,rx:{mastery:s.mastery||{},best:s.best||{},coBest:s.coBest||{}}});
+  const o=JSON.parse(localStorage.getItem('chem-kitchen-v1')||'null');
+  if(o&&!SAVE.migratedV1){
+    SAVE.migratedV1=true;
+    if(!Object.keys(SAVE.atom.mastery||{}).length)SAVE.atom={mastery:o.mastery||{},best:o.best||{},coBest:o.coBest||{}};
+    SAVE.tutA=SAVE.tutA||!!o.tut;if(!SAVE.name)SAVE.name=o.name||'';
+    if(o.vs&&!(SAVE.vs.win+SAVE.vs.lose+SAVE.vs.draw))SAVE.vs=o.vs;
+  }
 }catch(e){}
-if(!SAVE.coBest)SAVE.coBest={};if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
+for(const g of ['rx','atom']){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
+if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
+if(SAVE.g!=='atom')SAVE.g='rx';
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
-function mst(id){return SAVE.mastery[id]||(SAVE.mastery[id]={box:0,seen:0,ok:0,ng:0});}
-function applyMastery(m){
-  if(!Array.isArray(m)||!MENU[m[0]])return;
-  const x=mst(m[0]);
+const SV=g=>SAVE[g==='atom'?'atom':'rx'];
+const knownKey=(g,k)=>g==='atom'?!!A.BYID[k]:!!MENU[k];
+const curG=()=>{const V=view();return V&&V.g?V.g:SAVE.g;};
+function mst(id,g=curG()){const M=SV(g).mastery;return M[id]||(M[id]={box:0,seen:0,ok:0,ng:0});}
+function applyMastery(m,g=curG()){
+  if(!Array.isArray(m)||!knownKey(g,m[0]))return;
+  const x=mst(m[0],g);
   switch(m[1]){
     case 'seen':x.seen++;break;
     case 'ok':x.box=Math.min(5,x.box+1);x.ok++;break;
@@ -29,15 +43,19 @@ function applyMastery(m){
   }
   persistSoon();
 }
-function myWeights(){const w={};for(const id in SAVE.mastery){const m=SAVE.mastery[id];if(m&&m.seen&&MENU[id])w[id]=m.box|0;}return w;}
-function cleanWeights(w){
+function myWeights(g){const w={},M=SV(g).mastery;for(const id in M){const m=M[id];if(m&&m.seen&&knownKey(g,id))w[id]=m.box|0;}return w;}
+const allWeights=()=>({rx:myWeights('rx'),atom:myWeights('atom')});
+function cleanW(w,g){
   const o={};if(!w||typeof w!=='object')return o;
-  for(const id in w)if(MENU[id]&&typeof w[id]==='number')o[id]=Math.max(0,Math.min(5,w[id]|0));
+  for(const id in w)if(knownKey(g,id)&&typeof w[id]==='number')o[id]=Math.max(0,Math.min(5,w[id]|0));
   return o;
 }
+const cleanWeights=w=>({rx:cleanW(w&&w.rx,'rx'),atom:cleanW(w&&w.atom,'atom')});
 const cleanName=s=>String(s||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,10)||'ケミスト';
 const myName=()=>cleanName(SAVE.name);
-function reviewPool(){return MKEYS.filter(k=>{const m=SAVE.mastery[k];return m&&m.seen&&(m.box<=2||m.ng>m.ok);});}
+function reviewPool(g){const M=SV(g).mastery;return Object.keys(M).filter(k=>{const m=M[k];return knownKey(g,k)&&m&&m.seen&&(m.box<=2||m.ng>m.ok);});}
+const stagesOf=g=>E.RULES[g==='atom'?'atom':'rx'].stages;
+const reviewOf=g=>E.RULES[g==='atom'?'atom':'rx'].review;
 
 /* ================= 音 ================= */
 let AC=null,MASTER=null,NOISE=null;
@@ -135,31 +153,45 @@ const colorOf=(V,pid)=>{const P=V&&V.players[pid];return COLORS[P?P.slot%4:0];};
 
 /* ================= タイトル ================= */
 function starsFor(st,score){if(!st.stars)return 0;return st.stars.filter(t=>score>=t).length;}
-function unlocked(i){if(i===0)return true;const p=STAGES[i-1];return starsFor(p,SAVE.best[p.id]||0)>=1;}
+function unlocked(i,g=SAVE.g){if(i===0)return true;const p=stagesOf(g)[i-1];return starsFor(p,SV(g).best[p.id]||0)>=1;}
+const HOWTO={
+  rx:`<b>反応式モード</b>：試薬・<b>触媒</b>・<b>加熱の有無</b>を選んで反応式を組む。MnO₂や濃硫酸は「触媒のとき」と「反応物のとき」があるので要注意。工業的製法は製法名つきで注文される。<br>
+      <b>覚え方の仕組み</b>：間違えた・時間切れの反応は結果画面に反応式と条件が出て、次からよく注文される（協力・対戦でも全員の苦手を反映）。ヒント・余計な加熱/触媒では習熟★は上がらない。<br>
+      <b>係数判定</b>：ONにすると係数まで合わせないと反応しない（京大ラッシュは常にON）。`,
+  atom:`<b>組成モード</b>：周期表の棚から元素を選んで、注文の物質の<b>分子式</b>を組み立てる。注文は名前か「性質」で来る。<br>
+      <b>覚え方の仕組み</b>：間違えた・時間切れの物質は答えが表示され、次からよく注文される。ヒントを使うと報酬は減り、習熟（★）は上がらない。★5で習得。<br>
+      <b>判定は分子式（組成式）</b>：C₂H₆O ならエタノールでもジメチルエーテルでも同じ扱い。`
+};
 function renderTitle(){
+  const g=SAVE.g,R=SV(g),ST=stagesOf(g),RV=reviewOf(g);
+  $('titleGame').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
   let h='';
-  STAGES.forEach((st,i)=>{
-    const best=SAVE.best[st.id]||0,s=starsFor(st,best),lock=!unlocked(i);
+  ST.forEach((st,i)=>{
+    const best=R.best[st.id]||0,s=starsFor(st,best),lock=!unlocked(i,g);
     h+=`<button class="stage${lock?' locked':''}" data-stage="${i}">
       <div class="no">${lock?'🔒':i+1}</div>
       <div><h3>${esc(st.name)}</h3><p>${esc(st.desc)}${lock?'<br>前のステージで★1を取ると解放':''}</p></div>
       <div class="best"><div class="stars">${'★'.repeat(s)}${'☆'.repeat(3-s)}</div>${best?best+'点':'—'}</div></button>`;
   });
-  const weak=reviewPool().length;
+  const weak=reviewPool(g).length,unit=g==='atom'?'物質':'反応';
   h+=`<button class="stage review" data-stage="rv"><div class="no">復</div>
-    <div><h3>${REVIEW.name}</h3><p>${weak?`苦手候補 ${weak} 物質から集中注文。星なし・何度でも`:'一度でも注文された物質が出たら解放'}</p></div>
-    <div class="best">${SAVE.best.rv?SAVE.best.rv+'点':'—'}</div></button>`;
+    <div><h3>${RV.name}</h3><p>${weak?`苦手候補 ${weak} ${unit}から集中注文。星なし・何度でも`:`一度でも注文された${unit}が出たら解放`}</p></div>
+    <div class="best">${R.best.rv?R.best.rv+'点':'—'}</div></button>`;
   $('stageList').innerHTML=h;
   $('btnMute').textContent='音: '+(SAVE.mute?'OFF':'ON');
   $('btnCoef').textContent='係数判定: '+(SAVE.coef?'ON':'OFF');
+  $('btnCoef').style.display=g==='rx'?'':'none';
+  $('btnDex').textContent=g==='atom'?'物質図鑑':'反応図鑑';
+  $('howto').innerHTML=HOWTO[g];
   if(document.activeElement!==$('inName'))$('inName').value=SAVE.name||'';
 }
+$('titleGame').addEventListener('click',e=>{const b=e.target.closest('[data-g]');if(!b)return;SAVE.g=b.dataset.g==='atom'?'atom':'rx';persist();sfx('tap');renderTitle();});
 $('stageList').addEventListener('click',e=>{
   const b=e.target.closest('.stage');if(!b)return;
   audio();
-  const v=b.dataset.stage;
-  if(v==='rv'){if(!reviewPool().length&&!Object.keys(myWeights()).length){overlay(`<h2>まだ早い</h2><p>ステージを1回遊ぶと、注文された反応の習熟度が記録され、苦手克服ランが使えるようになる。</p><button class="btn" data-ov="close">閉じる</button>`);return;}startSolo('rv');return;}
-  const i=+v;if(!unlocked(i))return;startSolo(STAGES[i].id);
+  const v=b.dataset.stage,g=SAVE.g;
+  if(v==='rv'){if(!reviewPool(g).length&&!Object.keys(myWeights(g)).length){overlay(`<h2>まだ早い</h2><p>ステージを1回遊ぶと、注文された${g==='atom'?'物質':'反応'}の習熟度が記録され、苦手克服ランが使えるようになる。</p><button class="btn" data-ov="close">閉じる</button>`);return;}startSolo('rv');return;}
+  const i=+v;if(!unlocked(i,g))return;startSolo(stagesOf(g)[i].id);
 });
 $('inName').addEventListener('input',e=>{SAVE.name=e.target.value.trim().slice(0,10);persistSoon();});
 $('btnMute').addEventListener('click',()=>{SAVE.mute=!SAVE.mute;persist();audio();if(MASTER)MASTER.gain.value=SAVE.mute?0:0.5;renderTitle();});
@@ -170,8 +202,9 @@ $('btnDexBack').addEventListener('click',()=>{renderTitle();show('title');});
 $('btnHost').addEventListener('click',()=>{audio();createRoom();});
 $('btnJoin').addEventListener('click',()=>{audio();joinDialog('');});
 
-function tutorial(fromGame){
-  overlay(`<h2>遊び方</h2><div class="tut">
+function tutorial(fromGame,g=SAVE.g){
+  if(g==='atom'){tutorialA(fromGame);return;}
+  overlay(`<h2>遊び方（反応式モード）</h2><div class="tut">
     <div class="step"><span class="n">1</span><div>伝票の物質を作る<b>反応式</b>を考える。<b>試薬棚</b>をタップしてフラスコへ。同じ試薬をもう一度タップで<b>係数+1</b>（濃・希の違いに注意）。</div></div>
     <div class="step"><span class="n">2</span><div>必要なら<b>触媒</b>（棚の最下段）をタップしてセット。フラスコの<b>🔥ボタン</b>で 常温→加熱→高温・高圧 を切り替え。</div></div>
     <div class="step"><span class="n">3</span><div><b>「反応」</b>。反応物・触媒・温度が合わないと<b>反応しない</b>（序盤は理由が出る）。いらない加熱や触媒は反応するが報酬×0.7。</div></div>
@@ -181,14 +214,27 @@ function tutorial(fromGame){
   </div><button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開店する':'わかった'}</button>`);
 }
 
+function tutorialA(fromGame){
+  overlay(`<h2>遊び方（組成モード）</h2><div class="tut">
+    <div class="step"><span class="n">1</span><div><b>周期表をタップ</b>して、黄色い枠のフラスコに原子を入れる。長押しで連続投入。チップをタップで1個戻す。</div></div>
+    <div class="step"><span class="n">2</span><div><b>「加熱」</b>で反応開始。レシピに無い組成だと<b>失敗作</b>になる。</div></div>
+    <div class="step"><span class="n">3</span><div>完成したフラスコをタップして持ち、<b>届けたい注文の伝票をタップ</b>。早いほどチップが増え、連続成功でチップ倍率が最大×4。</div></div>
+    <div class="step"><span class="n">4</span><div>完成品を放置すると<b>燃える</b>。燃えたフラスコは連打で消火。</div></div>
+    <div class="step"><span class="n">5</span><div>伝票の「ヒント」で元素→化学式の順に表示。ただし報酬が減り、習熟★は上がらない。</div></div>
+    <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は周期表の分担とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
+  </div><button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開店する':'わかった'}</button>`);
+}
+
 /* ================= 図鑑 ================= */
 function renderDex(){
+  $('dexTitle').textContent=SAVE.g==='atom'?'物質図鑑':'反応図鑑';
+  if(SAVE.g==='atom'){renderDexA();return;}
   let h='',seen=0,master=0;
   ['lab','ppt','ind','org'].forEach(c=>{
     const items=MKEYS.filter(k=>MENU[k].c===c);
     h+=`<div class="dex-sec"><h4>${CATNAME[c]}</h4><div class="dex-grid">`;
     items.forEach(k=>{
-      const m=SAVE.mastery[k],it=MENU[k];
+      const m=SAVE.rx.mastery[k],it=MENU[k];
       if(m&&m.seen){seen++;if(m.box>=5)master++;
         h+=`<button class="dx" data-dx="${esc(k)}"><div class="f">${fmt(fOf(it.t))}</div>${esc(nameOf(it.t))}${it.proc?`<br><small>${esc(it.proc)}</small>`:''}<div class="s">${stars3(m.box)}</div></button>`;}
       else h+=`<div class="dx unseen"><div class="f">？？？</div>未注文</div>`;
@@ -202,8 +248,30 @@ function routeHTML(key,usedRx){
   const rs=usedRx&&RXBY[usedRx]?[RXBY[usedRx]]:route(key);
   return rs.map((x,i)=>`<div class="eqline">${rs.length>1?`<span class="stepn">${i+1}</span>`:''}${eqHTML(x,MENU[key]&&MENU[key].t)}<span class="cond">［${condText(x)}］</span>${x.note?`<div class="note2">${esc(x.note)}</div>`:''}</div>`).join('');
 }
+function renderDexA(){
+  let h='',seen=0,master=0;
+  ['gas','ppt','inorg','org'].forEach(c=>{
+    const items=A.DB.filter(d=>d.c===c);
+    h+=`<div class="dex-sec"><h4>${A.CATNAME[c]}</h4><div class="dex-grid">`;
+    items.forEach(d=>{
+      const m=SAVE.atom.mastery[d.id];
+      if(m&&m.seen){seen++;if(m.box>=5)master++;
+        h+=`<button class="dx" data-dxa="${esc(d.id)}"><div class="f">${fmt(d.f)}</div>${esc(d.n)}<div class="s">${stars3(m.box)}</div></button>`;}
+      else h+=`<div class="dx unseen"><div class="f">？？？</div>未注文</div>`;
+    });
+    h+='</div></div>';
+  });
+  $('dexList').innerHTML=h;
+  $('dexSum').textContent=`出会った物質 ${seen} / ${A.DB.length}　習得（★5） ${master}　対戦成績 ${SAVE.vs.win}勝${SAVE.vs.lose}敗${SAVE.vs.draw?SAVE.vs.draw+'分':''}`;
+}
 $('dexList').addEventListener('click',e=>{
-  const b=e.target.closest('[data-dx]');if(!b)return;const k=b.dataset.dx,it=MENU[k];if(!it)return;const m=mst(k);
+  const ba=e.target.closest('[data-dxa]');
+  if(ba){const d=A.BYID[ba.dataset.dxa];if(!d)return;const m=mst(d.id,'atom');
+    overlay(`<h2>${fmt(d.f)}</h2><p style="margin:0 0 6px;font-weight:800">${esc(d.n)}（${A.CATNAME[d.c]}）　分子式 ${fmt(A.hill(d.m))}</p>
+      <div class="rev">${d.p.map(x=>`<div class="it ok">${esc(x)}</div>`).join('')}</div>
+      <p style="font-size:12px">正解 ${m.ok} 回 / ミス ${m.ng} 回 / 習熟 ${stars3(m.box)}</p>
+      <button class="btn" data-ov="close">閉じる</button>`);return;}
+  const b=e.target.closest('[data-dx]');if(!b)return;const k=b.dataset.dx,it=MENU[k];if(!it)return;const m=mst(k,'rx');
   const alts=Object.values(RXBY).filter(x=>!it.via&&x.main===it.t&&x.id!==route(k).at(-1).id);
   overlay(`<h2>${fmt(fOf(it.t))}</h2><p style="margin:0 0 6px;font-weight:800">${esc(nameOf(it.t))}（${CATNAME[it.c]}${it.proc?'・'+esc(it.proc):''}）</p>
     <div class="sec-h">作り方</div><div class="rev"><div class="it ok">${routeHTML(k)}</div></div>
@@ -214,15 +282,15 @@ $('dexList').addEventListener('click',e=>{
 });
 
 /* ================= ソロ ================= */
-function startSolo(stageId){
+function startSolo(stageId,g=SAVE.g){
   leaveSession(true);
-  const st=E.stageById(stageId);
+  const st=E.stageById(g,stageId);
   let pool=null;
-  if(st.pool==='review'){const p=reviewPool();pool=p.length?p:Object.keys(myWeights());}
-  const cfg={mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(),pool,coef:SAVE.coef};
+  if(st.pool==='review'){const p=reviewPool(g);pool=p.length?p:Object.keys(myWeights(g));}
+  const cfg={g,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
-  if(!SAVE.tut&&stageId==='s1'){SES.waitTut=true;tutorial(true);}
+  if(!(g==='atom'?SAVE.tutA:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
   else countdown(beginLocal);
 }
 function beginLocal(){
@@ -283,7 +351,7 @@ function act(a){
 async function createRoom(){
   leaveSession(true);
   const ses={role:'host',me:'p0',pidN:0,code:'',players:[{id:'p0',name:myName(),slot:0,cid:null}],
-    cfg:{mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:myWeights()},acks:{},q:{},S:null,inGame:false};
+    cfg:{g:SAVE.g,mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:allWeights()},acks:{},q:{},S:null,inGame:false};
   SES=ses;
   overlay('<h2>部屋を準備中…</h2><p>接続サーバーにつないでいる。</p>','wait');
   const net=new HostNet({onConnect:cid=>hostOnConnect(ses,cid),onMessage:(cid,m)=>hostOnMessage(ses,cid,m),onClose:cid=>hostOnClose(ses,cid)});
@@ -361,7 +429,7 @@ function hostStartGame(){
   const ses=SES;if(!ses||ses.role!=='host')return;
   if(ses.players.length<2){toastLobby('2人以上そろったら開店できる');return;}
   const players=ses.players.map(({id,name,slot})=>({id,name,slot}));
-  const ws=players.map(p=>ses.wts[p.id]||{});
+  const ws=players.map(p=>(ses.wts[p.id]||{})[ses.cfg.g]||{});
   const cfg=Object.assign({},ses.cfg,{players,weights:mergeWeights(ws)});
   if(cfg.stageId==='rv'){
     // 苦手ミックス：誰か1人でも★2以下の物質を集める
@@ -405,7 +473,7 @@ async function joinRoom(code){
   try{await net.join(code);}
   catch(e){if(SES===ses)SES=null;joinDialog(code,e.message||String(e));return;}
   if(SES!==ses){net.close();return;}
-  net.send({t:'hello',v:PROTO,name:myName(),w:myWeights()});
+  net.send({t:'hello',v:PROTO,name:myName(),w:allWeights()});
   ses.hb=setInterval(()=>{if(SES!==ses)return;net.send({t:'ping'});if(Date.now()-ses.lastMsg>15000)clientOnClose(ses);},2000);
   ses.joinTO=setTimeout(()=>{if(SES===ses&&!ses.me)clientOnClose(ses);},10000);
 }
@@ -431,7 +499,7 @@ function clientOnMessage(ses,m){
     case 'end':
       if(ses.ended)return;ses.ended=true;
       if(m.r)showResults(m.r);
-      ses.net.send({t:'w',w:myWeights()});break;
+      ses.net.send({t:'w',w:allWeights()});break;
     case 'tolobby':
       ses.V=null;ses.ended=false;stopGameUI();closeOverlay();showLobby();break;
     case 'closed':
@@ -493,10 +561,23 @@ const RULES={
     <li>おじゃまは<b>3.5秒後</b>に着弾。それまでに自分も届ければ<b>相殺</b>、余りは打ち返せる。</li>
     <li>誤配すると答えは見えるが、その注文は<b>出禁</b>。</li></ul>`
 };
+const RULES_A={
+  coop:`<b>協力のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
+    <li><b>棚の分担</b>：周期表の列ごとに担当が決まる（2人なら1・13・15・17族 と 2・14・16・18族）。HとOは必ず別担当なので、水・酸・有機物は連携しないと作れない。</li>
+    <li>担当外の元素をタップすると担当者に<b>リクエスト</b>。相手がタップすると<b>あなたのフラスコ</b>に入る。</li>
+    <li>フラスコ・注文・得点は全員で共有。<b>40秒ごとに棚替え</b>。2人以上で原子を入れたフラスコは<b>連携ボーナス×1.2</b>。</li>
+    <li>フラスコを持たずに伝票をタップすると「担当宣言」。💬でスタンプ。</li></ul>`,
+  versus:`<b>対戦のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
+    <li>注文ボードは全員共通。<b>先に正しく届けた人</b>だけが得点。</li>
+    <li>届けると首位の相手に<b>おじゃま</b>。原子が多い物質・VIP・4連続以上・ラッシュ中ほど強い：1=煙幕 2=在庫切れ 3=引火 4以上=大惨事。</li>
+    <li>おじゃまは<b>3.5秒後</b>に着弾。それまでに自分も届ければ<b>相殺</b>、余りは打ち返せる。</li>
+    <li>誤配すると答えは見えるが、その注文は<b>出禁</b>。</li></ul>`
+};
 function renderLobby(){
   const ses=SES;if(!ses)return;
   const host=ses.role==='host';
-  const cfg=ses.cfg||{mode:'coop',stageId:'s1',split:true};
+  const cfg=ses.cfg||{g:'rx',mode:'coop',stageId:'s1',split:true};
+  const g=cfg.g==='atom'?'atom':'rx';
   const code=ses.code||'----';
   $('lobCode').textContent=code;
   const qr=$('qr');
@@ -515,20 +596,22 @@ function renderLobby(){
   $('lobPlayers').innerHTML=h;
   $('lobCount').textContent=`${ps.length} / 4`;
   $('lobMode').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.mode===cfg.mode);b.disabled=!host;});
-  $('lobRules').innerHTML=RULES[cfg.mode]||'';
+  $('lobGame').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.g===g);b.disabled=!host;});
+  $('lobRules').innerHTML=(g==='atom'?RULES_A:RULES)[cfg.mode]||'';
   let sh='';
-  [...STAGES,{id:'rv',name:'苦手ミックス',desc:'全員の苦手な反応（★2以下）を集中注文'}].forEach(st=>{
+  [...stagesOf(g),{id:'rv',name:'苦手ミックス',desc:`全員の苦手な${g==='atom'?'物質':'反応'}（★2以下）を集中注文`}].forEach(st=>{
     sh+=`<button class="lst${st.id===cfg.stageId?' on':''}" data-st="${st.id}" ${host?'':'disabled'}><b>${esc(st.name)}</b><span>${esc(st.desc)}</span></button>`;
   });
   $('lobStages').innerHTML=sh;
   $('lobSplitRow').style.display=cfg.mode==='coop'?'':'none';
   $('lobSplit').checked=cfg.split!==false;$('lobSplit').disabled=!host;
-  $('lobCoef').checked=!!cfg.coef;$('lobCoef').disabled=!host;
+  $('lobCoef').checked=!!cfg.coef;$('lobCoef').disabled=!host;$('lobCoefRow').style.display=g==='rx'?'':'none';
   const st=$('btnStart');
   st.style.display=host?'':'none';
   st.disabled=ps.length<2;
   $('lobWait').textContent=host?(ps.length<2?'友達が入るのを待っている（2〜4人）':`${ps.length}人そろった。開店しよう`):(ses.inGame?'ゲーム中。終わるまで待って':'ホストが開店するのを待っている…');
 }
+$('lobGame').addEventListener('click',e=>{const b=e.target.closest('[data-g]');if(!b||!SES||SES.role!=='host')return;const g=b.dataset.g==='atom'?'atom':'rx';if(SES.cfg.g!==g){SES.cfg.g=g;SES.cfg.stageId='s1';SAVE.g=g;persist();}sfx('tap');lobbyChanged(true);});
 $('lobMode').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b||!SES||SES.role!=='host')return;SES.cfg.mode=b.dataset.mode;sfx('tap');lobbyChanged(true);});
 $('lobStages').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(!b||!SES||SES.role!=='host')return;SES.cfg.stageId=b.dataset.st;sfx('tap');lobbyChanged(true);});
 $('lobSplit').addEventListener('change',e=>{if(!SES||SES.role!=='host')return;SES.cfg.split=e.target.checked;lobbyChanged(true);});
@@ -566,8 +649,8 @@ async function wake(on){
 function enterGame(){
   const V=view();if(!V)return;
   UI.active=null;UI.held=null;UI.sig={};UI.lastTick=-1;UI.pauseShown=false;UI.incSig='';
-  $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.stageId).name;
-  buildTable();
+  $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.g,V.stageId).name;
+  buildTable(V.g);
   $('feed').innerHTML='';$('incoming').classList.remove('on');$('game').classList.remove('danger');
   $('mpbar').classList.toggle('on',V.mode!=='solo');
   closeStamps();
@@ -667,6 +750,7 @@ function hintHTML(V,key,level,mode){
   return `${lhs}／${cond}`;
 }
 function renderOrders(V){
+  if(V.g==='atom')return renderOrdersA(V);
   const slots=Math.max(4,V.max),three=slots>4;
   const box=$('orders');box.classList.toggle('three',three);
   let h='';
@@ -692,9 +776,35 @@ function renderOrders(V){
   }
   box.innerHTML=h;
 }
+function renderOrdersA(V){
+  const slots=Math.max(4,V.max),three=slots>4;
+  const box=$('orders');box.classList.toggle('three',three);
+  let h='';
+  for(let k=0;k<slots;k++){
+    const o=V.orders[k];const d=o&&A.BYID[o.k];
+    if(!d){h+=`<div class="ticket empty"></div>`;continue;}
+    const isName=o.mode==='name';
+    const clue=isName?`<div class="clue name">${esc(d.n)}</div>`:`<div class="clue">${esc(d.p[o.ci]||d.p[0])}</div>`;
+    const hn=E.hintsOf(V,o,me());
+    let rev='';
+    if(hn>=1)rev+=isName?`元素：${Object.keys(d.m).join('・')}`:esc(d.n);
+    if(hn>=2)rev+=' / '+fmt(d.f);
+    const banned=V.mode==='versus'&&o.ban&&o.ban[me()];
+    const cl=V.mode==='coop'&&o.claim&&V.players[o.claim];
+    let cls='ticket';if(o.vip)cls+=' vip';if(UI.held!=null&&!banned)cls+=' target';if(cl)cls+=' claimed';if(banned)cls+=' banned';
+    h+=`<div class="${cls}" data-o="${o.id}"${cl?` style="--cc:${colorOf(V,o.claim)}"`:''}>
+      <div class="t-top"><span class="face" data-face>${faceFor(o.left/o.total)}</span>
+        ${o.vip?'<span class="tag vip">VIP×2</span>':''}<span class="tag">${isName?'名前':'性質'}</span>
+        <button class="hint" data-act="hint" ${hn>=2?'disabled':''}>ヒント${hn?hn:''}</button></div>
+      ${clue}${rev?`<div class="reveal">${rev}</div>`:''}
+      ${cl?`<span class="claimtag">${esc(cl.name)}</span>`:''}
+      <div class="tbar"><i data-bar></i></div></div>`;
+  }
+  box.innerHTML=h;
+}
 function sigFlasks(V){
   const foc=V.mode==='coop'?V.order.map(p=>V.players[p].left?'':p+'@'+V.players[p].focus).join(','):'';
-  return UI.active+'|'+UI.held+'|'+foc+'|'+myFlasks(V).map(f=>[f.id,f.state,f.items.map(a=>a.join('')).join(','),f.cat,f.heat,f.prod?f.prod.rx+f.prod.over.join(''):'',f.fail?f.fail.why:'',f.taps,f.warned?1:0,Object.keys(f.by).join('')].join(':')).join('/');
+  return UI.active+'|'+UI.held+'|'+foc+'|'+myFlasks(V).map(f=>[f.id,f.state,f.items.map(a=>a.join('')).join(','),f.cat,f.heat,f.prod?(f.prod.rx||f.prod.label)+f.prod.over.join(''):'',f.fail?f.fail.why:'',f.taps,f.warned?1:0,Object.keys(f.by).join('')].join(':')).join('/');
 }
 const HEATBTN=['🌡常温','🔥加熱','🔥高温高圧'],HEATSHORT=['常温','加熱','高圧'];
 function itemChip(f,[id,n,poured]){
@@ -706,9 +816,25 @@ function renderFlasks(V){
   const box=$('flasks');box.style.gridTemplateColumns=`repeat(${n},minmax(0,1fr))`;box.classList.toggle('four',n>=4);box.classList.toggle('three',n===3);
   const HB=n>=4?['常','熱','高']:n>=3?HEATSHORT:HEATBTN;
   let h='';
+  const atom=V.g==='atom';
   mine.forEach(f=>{
     const lab=FL[f.idx];let cls='flask',st='',body='',btns='';
-    if(f.state==='idle'){
+    if(atom&&f.state==='idle'){
+      if(f.id===UI.active)cls+=' active'+(coop?' mine':'');
+      st=f.items.length?'調合中':(f.id===UI.active?'ここに投入':'空き');
+      body=f.items.map(([s,c])=>`<span class="chip" data-act="chip" data-s="${esc(s)}">${esc(s)}${c>1?`<sub>${c}</sub>`:''}</span>`).join('');
+      btns=`<button data-act="react" ${f.items.length?'':'disabled'}>加熱</button><button class="dump" data-act="dump" aria-label="捨てる" ${f.items.length?'':'disabled'}>捨</button>`;
+    }else if(atom&&f.state==='heat'){
+      st='加熱中…';body=`<div class="product small">${fmt(A.hill((f.res&&f.res.comp)||{}))}</div>`;btns=`<span class="note">ぐつぐつ</span>`;
+    }else if(atom&&f.state==='ready'){
+      cls+=UI.held===f.id?' held':' ready';if(f.warned)cls+=' warn';
+      st=UI.held===f.id?'伝票をタップで提供':(f.warned?'焦げそう！':'完成！ タップで持つ');
+      body=`<div class="product">${fmt(f.prod.label)}</div>`;
+      btns=`<button class="dump" data-act="dump" aria-label="捨てる" style="flex:1">捨てる</button>`;
+    }else if(atom&&f.state==='fail'){
+      cls+=' fail';st='失敗作';body=`<div class="product small">${fmt(f.fail?f.fail.label:'?')}<br>はレシピに無い</div>`;
+      btns=`<button data-act="dump">捨てる</button>`;
+    }else if(f.state==='idle'){
       if(f.id===UI.active)cls+=' active'+(coop?' mine':'');
       if(UI.held!=null&&UI.held!==f.id)cls+=' pourable';
       st=UI.held!=null&&UI.held!==f.id?'ここに注げる':f.items.length||f.cat?'調合中':(f.id===UI.active?'ここに投入':'空き');
@@ -763,13 +889,30 @@ function symHTML(lab){
   let px=Math.min(14,Math.floor(34/mw*10)/10);if(cc)px=Math.min(px,12.5);
   return {cls:'',px,html:(cc?`<small class="cc">${cc}</small>`:'')+lines.map(fmt).join('<br>')};
 }
-function buildTable(){
+function buildTable(g){
+  const T=$('ptable');T.classList.toggle('rx',g!=='atom');
+  if(g==='atom'){
+    let h='';
+    ['1','2','13','14','15','16','17','18'].forEach(x=>h+=`<div class="glab">${x}</div>`);
+    A.MAIN.forEach((row,r)=>{
+      row.forEach((s,c)=>{
+        if(r===0&&c===1){h+=`<div class="gap-note">周期表の棚（典型元素）／下段は遷移元素</div>`;return;}
+        if(r===0&&c>1&&c<7)return;
+        if(!s)return;
+        h+=cellHTMLA(s);
+      });
+    });
+    h+=`<div class="dsep"></div>`;
+    A.DROW.forEach(s=>h+=cellHTMLA(s));
+    T.innerHTML=h;T.classList.remove('dark');return;
+  }
   let h=`<div class="shelf-cap">試薬棚：タップでフラスコへ／もう一度で係数+1</div>`;
   SHELF.forEach(row=>row.forEach(id=>{h+=cellHTML(id);}));
   h+=`<div class="shelf-cap cat">触媒・脱水剤（矢印の上に書くもの）：タップでセット／もう一度で外す</div>`;
   CATS.forEach(c=>{h+=cellHTML('@'+c);});
   $('ptable').innerHTML=h;$('ptable').classList.remove('dark');
 }
+function cellHTMLA(s){return `<button class="cell c-${A.CAT[s]}" data-el="${s}" aria-label="${s}"><span class="z">${A.ZN[s]}</span><span class="sym">${s}</span><span class="bd"></span></button>`;}
 function cellHTML(key){
   const y=symHTML(cellLabel(key));
   const kind=key[0]==='@'?'cat':(SUB[key].k||'salt');
@@ -778,7 +921,7 @@ function cellHTML(key){
 function sigCells(V){
   const own=E.owners(V);
   const rq=V.reqs.filter(r=>r.to===me()||r.from===me()).map(r=>r.s+r.f+r.from).join();
-  const lk=E.CELLS_ALL.filter(s=>E.isLocked(V,me(),s)).join();
+  const lk=E.cellsOf(V.g).filter(s=>E.isLocked(V,me(),s)).join();
   return (own?V.rot+V.order.filter(p=>!V.players[p].left).join():'-')+'|'+rq+'|'+lk+'|'+E.isDark(V,me());
 }
 function renderCells(V){
@@ -803,7 +946,7 @@ function renderCells(V){
 /* ---------- マルチプレイ表示 ---------- */
 function miniFlasks(V,pid){
   return V.flasks.filter(f=>f.owner===pid).map(f=>
-    f.state==='ready'?`<b class="rd">${fmt(fOf(f.prod.main))}</b>`:
+    f.state==='ready'?`<b class="rd">${fmt(f.prod.label||fOf(f.prod.main))}</b>`:
     f.state==='heat'?'<b class="ht">反応中</b>':
     f.state==='fire'?'<b class="fr">🔥</b>':
     f.state==='fail'?'<b>×</b>':
@@ -884,7 +1027,8 @@ $('ptable').addEventListener('pointerdown',e=>{
 $('ptable').addEventListener('contextmenu',e=>e.preventDefault());
 function tryAdd(s,cell){
   const V=view();if(!playable(V))return false;const M=me();
-  if(E.isLocked(V,M,s)){sfx('lock');toast(`${fmt(cellLabel(s))} は在庫切れ`,'ng');return false;}
+  const RL=E.RULES[V.g]||E.RULES.rx;
+  if(E.isLocked(V,M,s)){sfx('lock');toast(`${fmt(RL.label(s))} は在庫切れ`,'ng');return false;}
   ensureActive(V);
   const own=E.owners(V),req=!!own&&own[s]!==M;
   const pendingToMe=V.reqs.some(r=>r.to===M&&r.s===s);
@@ -893,8 +1037,8 @@ function tryAdd(s,cell){
   if(req&&V.reqs.filter(r=>r.from===M).length>=8){toast('リクエストは8個まで','ng');sfx('lock');return false;}
   if(!req&&!pendingToMe&&f&&s[0]!=='@'){
     const x=f.items.find(y=>y[0]===s);
-    if(x&&(x[2]||x[1]>=E.MAX_COEF))return false;
-    if(!x&&f.items.length>=E.MAX_SPECIES){toast(`試薬は${E.MAX_SPECIES}種類まで`,'ng');return false;}
+    if(x&&(x[2]||x[1]>=RL.maxCoef))return false;
+    if(!x&&f.items.length>=RL.maxSpecies){toast(`${V.g==='atom'?'元素':'試薬'}は${RL.maxSpecies}種類まで`,'ng');return false;}
   }
   act({t:'add',s,f:f?f.id:null});
   sfx(req?'req':s[0]==='@'?'pop':'tap');
@@ -908,7 +1052,7 @@ $('flasks').addEventListener('pointerdown',e=>{
   const id=+card.dataset.f,f=V.flasks.find(x=>x.id===id);if(!f)return;
   const b=e.target.closest('[data-act]');
   // 完成品を持っているときに空きフラスコをタップ → 注ぎ込む（中間体として使う）
-  if(UI.held!=null&&UI.held!==id&&f.state==='idle'&&!(b&&b.dataset.act!=='chip')){
+  if(V.g==='rx'&&UI.held!=null&&UI.held!==id&&f.state==='idle'&&!(b&&b.dataset.act!=='chip')){
     act({t:'pour',f:UI.held,to:id});UI.held=null;setActive(id);sfx('whoosh');return;
   }
   if(b){
@@ -961,14 +1105,14 @@ $('ov').addEventListener('click',e=>{
   const a=b.dataset.ov;
   switch(a){
     case 'close':closeOverlay();break;
-    case 'tutgo':SAVE.tut=true;persist();closeOverlay();if(SES&&SES.waitTut){SES.waitTut=false;countdown(beginLocal);}break;
+    case 'tutgo':if(curG()==='atom')SAVE.tutA=true;else SAVE.tut=true;persist();closeOverlay();if(SES&&SES.waitTut){SES.waitTut=false;countdown(beginLocal);}break;
     case 'resume':act({t:'resume'});closeOverlay();UI.pauseShown=false;break;
     case 'quit':
       closeOverlay();
       if(SES&&SES.role==='host')hostToLobby();else leaveSession(false);
       break;
-    case 'retry':{const id=SES&&SES.cfg?SES.cfg.stageId:'s1';closeOverlay();startSolo(id);break;}
-    case 'next':{const i=STAGES.findIndex(s=>s.id===(SES&&SES.cfg&&SES.cfg.stageId));closeOverlay();if(STAGES[i+1])startSolo(STAGES[i+1].id);break;}
+    case 'retry':{const id=SES&&SES.cfg?SES.cfg.stageId:'s1',g=SES&&SES.cfg?SES.cfg.g:SAVE.g;closeOverlay();startSolo(id,g);break;}
+    case 'next':{const g=SES&&SES.cfg?SES.cfg.g:SAVE.g,ST=stagesOf(g),i=ST.findIndex(s=>s.id===(SES&&SES.cfg&&SES.cfg.stageId));closeOverlay();if(ST[i+1])startSolo(ST[i+1].id,g);break;}
     case 'menu':leaveSession(false);break;
     case 'leave':leaveSession(false);break;
     case 'again':closeOverlay();hostStartGame();break;
@@ -992,7 +1136,33 @@ function nightNote(){
   const h=new Date().getHours();
   return (h>=23||h<5)?`<div class="night">🌙 もう${h>=23?h:h+24}時台。今日はここまでにして寝ろ。覚えた物質は眠っている間に記憶として固まる。夜ふかしで睡眠を削るほうが損。</div>`:'';
 }
+function reviewHTMLA(r,mode){
+  const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
+  const ng=[],ok=[];const seen=new Set();
+  (r.log||[]).slice().reverse().forEach(l=>{
+    const d=A.BYID[l.k];if(!d||seen.has(l.k))return;seen.add(l.k);
+    const mine=mode!=='versus'||l.by===M;
+    if(l.ok&&!l.hinted&&mine)ok.push(l);else ng.push(l);
+  });
+  let h='';
+  if(ng.length){
+    h+=`<div class="sec-h">要復習（次回よく注文される）</div><div class="rev">`+ng.map(l=>{
+      const d=A.BYID[l.k];
+      let why;
+      if(l.ok)why=l.by===M||mode==='solo'?'ヒント使用':`${esc(nm(l.by))} が提供`;
+      else if(l.given)why=`${fmt(esc(l.given))} を出した${mode!=='solo'&&l.by!==M?`（${esc(nm(l.by))}）`:''}`;
+      else why=esc(l.why||'');
+      return `<div class="it"><b>${fmt(d.f)}</b>　${esc(d.n)}　<span class="why">${why}</span><br>${esc(d.p.join('／'))}</div>`;
+    }).join('')+`</div>`;
+  }
+  if(ok.length){
+    h+=`<div class="sec-h">ノーヒントで正解</div><div class="rev">`+ok.map(l=>{
+      const d=A.BYID[l.k],m=mst(d.id,'atom');return `<div class="it ok"><b>${fmt(d.f)}</b>　${esc(d.n)}　<span style="color:#e0a100">${stars3(m.box)}</span></div>`;}).join('')+`</div>`;
+  }
+  return h;
+}
 function reviewHTML(r,mode){
+  if(r.g==='atom')return reviewHTMLA(r,mode);
   const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
   const ng=[],ok=[];const seen=new Set();
   (r.log||[]).slice().reverse().forEach(l=>{
@@ -1016,7 +1186,7 @@ function reviewHTML(r,mode){
   }
   if(ok.length){
     h+=`<div class="sec-h">ノーヒントで正解</div><div class="rev">`+ok.map(l=>{
-      const it=MENU[l.k],m=mst(l.k);
+      const it=MENU[l.k],m=mst(l.k,'rx');
       return `<div class="it ok">${title(it)}　<span style="color:#e0a100">${stars3(m.box)}</span>${routeHTML(l.k,l.rx)}</div>`;}).join('')+`</div>`;
   }
   return h;
@@ -1026,14 +1196,15 @@ function starsRow(stars,score){
   return `<div class="res-stars">${[0,1,2].map(k=>`<span class="${k<s?'on':''}" style="animation-delay:${k*0.25}s">★</span>`).join('')}</div>`;
 }
 function soloResults(r){
-  const st=E.stageById(r.stageId),score=r.team.score;
-  const prev=SAVE.best[st.id]||0;if(score>prev)SAVE.best[st.id]=score;persist();
-  const idx=STAGES.indexOf(st);
-  const canNext=idx>=0&&idx<STAGES.length-1&&unlocked(idx+1);
+  const g=r.g==='atom'?'atom':'rx',B=SV(g).best,ST=stagesOf(g);
+  const st=E.stageById(g,r.stageId),score=r.team.score;
+  const prev=B[st.id]||0;if(score>prev)B[st.id]=score;persist();
+  const idx=ST.indexOf(st);
+  const canNext=idx>=0&&idx<ST.length-1&&unlocked(idx+1,g);
   let h=`<h2>${score>=(st.stars?st.stars[0]:0)?'営業終了！':'営業終了…'}</h2>
     ${starsRow(st.stars,score)}
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
-    ${st.stars?`<div style="font-size:12px;font-weight:800">★ ${st.stars.join(' / ')} 点　自己ベスト ${SAVE.best[st.id]||0}</div>`:''}
+    ${st.stars?`<div style="font-size:12px;font-weight:800">★ ${st.stars.join(' / ')} 点　自己ベスト ${B[st.id]||0}</div>`:''}
     <div class="stats"><div>提供<b>${r.team.served}</b></div><div>失敗<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>`;
   h+=nightNote()+reviewHTML(r,'solo');
   h+=`<div class="row-btns">${canNext?'<button class="btn go" data-ov="next">次のステージ</button>':''}<button class="btn" data-ov="retry">もう一回</button><button class="btn sub" data-ov="menu">メニュー</button></div>`;
@@ -1045,17 +1216,17 @@ function mpButtons(){
 }
 function coopResults(r){
   const score=r.team.score,key=r.stageId+':'+r.n;
-  const prev=SAVE.coBest[key]||0;if(score>prev)SAVE.coBest[key]=score;persist();
+  const CB=SV(r.g).coBest;const prev=CB[key]||0;if(score>prev)CB[key]=score;persist();
   const ps=r.players.slice().sort((a,b)=>b.pts-a.pts||b.atoms-a.atoms);
   const mvp=ps[0]&&(ps[0].pts>0||ps[0].atoms>0)?ps[0].id:null;
   let h=`<h2>${r.stars&&score>=r.stars[0]?'営業終了！ ナイス連携':'営業終了…'}</h2>
     ${starsRow(r.stars,score)}
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
-    ${r.stars?`<div style="font-size:12px;font-weight:800">${r.n}人の★ ${r.stars.join(' / ')} 点　チームベスト ${SAVE.coBest[key]||0}</div>`:''}
+    ${r.stars?`<div style="font-size:12px;font-weight:800">${r.n}人の★ ${r.stars.join(' / ')} 点　チームベスト ${CB[key]||0}</div>`:''}
     <div class="stats"><div>提供<b>${r.team.served}</b></div><div>失敗<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
     <div class="sec-h">貢献</div><div class="rank">`+ps.map(p=>`<div class="rk" style="--pc:${COLORS[p.slot%4]}"><div class="no">${p.id===mvp?'👑':''}</div>
       <div><div class="nm">${esc(p.name)}${p.id===me()?'（あなた）':''}${p.id===mvp?'<span class="mvp">MVP</span>':''}${p.left?'（退出）':''}</div>
-      <div class="sub">提供 ${p.served}・入れた試薬 ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`).join('')+`</div>`;
+      <div class="sub">提供 ${p.served}・入れた${r.g==='atom'?'原子':'試薬'} ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`).join('')+`</div>`;
   h+=nightNote()+reviewHTML(r,'coop')+mpButtons();
   overlay(h,'result');
 }
