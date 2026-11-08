@@ -335,3 +335,63 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--ticket);outline
   .flask{min-height:96px}
   .flasks.four .flask{min-height:86px}
 }
+
+/* =================== 反応式モード =================== */
+.ptable{grid-template-rows:12px repeat(6,minmax(27px,1fr)) 13px minmax(27px,1fr)}
+.shelf-cap{grid-column:1/-1;font-size:9px;color:#7fa3ad;font-weight:800;text-align:center;line-height:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf-cap.cat{color:var(--ticket);align-self:end}
+.cell .sym{line-height:1.02;white-space:nowrap;padding:0 1px;text-align:center}
+.cell .sym.jp{white-space:normal;word-break:break-all;line-height:1.05}
+.cell .sym .cc{display:block;font-size:8.5px;line-height:1;opacity:.75}
+.cell .sym.md{font-size:11px}
+.cell .sym.sm{font-size:9.5px}
+.cell .sym.xs{font-size:8px;letter-spacing:-.02em}
+.cell .sym sub{font-size:.7em}
+.r-acid{background:#ff9e80}.r-base{background:#90caf9}.r-salt{background:#dfe5e8}.r-metal{background:#b0c4ce}
+.r-gas{background:#80deea}.r-org{background:#a5d6a7}.r-ion{background:#e1bee7}
+.r-cat{background:var(--ticket);border-style:dashed!important}
+.ptable.dark .cell .sym{visibility:hidden}
+
+.f-body{gap:2px;align-items:center}
+.f-body .plus{font-style:normal;font-weight:800;font-size:11px;opacity:.6}
+.chip{display:inline-flex;align-items:baseline;gap:1px}
+.chip .co{color:var(--hot);font-size:14px;margin-right:1px}
+.chip small{font-size:9px;background:var(--ink);color:#fff;border-radius:4px;padding:0 2px;margin-left:1px}
+.chip.poured{background:#c9f7e6;border-style:dashed}
+.chip.cat{background:var(--ticket);border-style:dashed}
+.chip.cat::before{content:"触";font-size:9px;margin-right:2px;opacity:.7}
+.f-btns .heatb{flex:1.25;background:#fff;font-size:12px;white-space:nowrap}
+.f-btns .heatb.h1{background:#ffb74d}
+.f-btns .heatb.h2{background:var(--hot);color:#fff}
+.flask .eq{font-size:9.5px;line-height:1.3;text-align:center;font-weight:800;color:#2a4752;word-break:break-word}
+.flask .eq b{color:var(--ink);background:#fff8;border-radius:3px}
+.flask .eqp{font-size:12px;font-weight:800;text-align:center;width:100%}
+.flask .eqp small{font-size:9px;background:var(--ticket);border:1px solid var(--ink);border-radius:4px;padding:0 2px;margin-left:2px}
+.flask .overn{font-size:10px;font-weight:800;color:#a8341a;text-align:center;width:100%}
+.flask .product{font-size:18px}
+.flask.fail .product.small{font-size:12px;line-height:1.35}
+.flask.pourable{outline:3px dashed var(--cool);outline-offset:-3px}
+.flasks.three .f-btns button{font-size:12px;padding:5px 1px}
+.flasks.three .f-btns .heatb{font-size:10.5px}
+.flasks.four .f-btns .heatb{font-size:9.5px}
+.flasks.four .flask .eq,.flasks.three .flask .eq{font-size:8.5px}
+
+.t-top .tag.step{background:var(--hot);color:#fff}
+.proc{font-size:10px;font-weight:800;background:var(--ink);color:var(--cool);border-radius:5px;padding:0 5px;align-self:flex-start}
+.reveal{line-height:1.45}
+.orders.three .t-top .tag.step{display:inline}
+
+.eqline{margin-top:4px;font-size:12.5px;line-height:1.5;font-weight:800}
+.eqline .cond{display:inline-block;margin-left:4px;font-size:11px;color:#2a6f5b}
+.eqline .stepn{display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:var(--ink);color:#fff;font-size:10px;margin-right:4px}
+.note2{font-size:11px;color:#3c5560;font-weight:500;line-height:1.45}
+.dx small{font-size:9px;color:#3c5560}
+
+.flasks.three .f-btns,.flasks.four .f-btns{gap:3px}
+.flasks.three .f-btns button,.flasks.four .f-btns button{font-size:11.5px;padding:5px 0;white-space:nowrap;min-width:0}
+.flasks.three .f-btns button.dump,.flasks.four .f-btns button.dump{flex:0 0 22px}
+.flasks.three .f-btns .heatb,.flasks.four .f-btns .heatb{flex:1;font-size:11.5px}
+.flask{min-width:0}
+.flask.held{z-index:2}
+.flasks.four .f-btns .heatb{flex:0 0 22px}
+.flasks.four .f-btns button{font-size:11px}

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>ケミカル・キッチン</title>
-<meta name="description" content="周期表の棚から元素を選んで注文の物質を合成する化学クッキングゲーム。友達と協力・対戦もできる。">
+<meta name="description" content="試薬・触媒・加熱を選んで反応式を組み、注文の物質を合成する化学クッキングゲーム。友達と協力・対戦もできる。">
 <meta name="theme-color" content="#16323d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
 
   <!-- タイトル -->
   <section id="title" class="screen on" aria-label="タイトル">
-    <h1 class="logo">ケミカル・キッチン<small>注文の物質を、周期表の棚から元素を選んで合成して届けろ。</small></h1>
+    <h1 class="logo">ケミカル・キッチン<small>試薬・触媒・加熱を選んで反応式を組み、注文の物質を作って届けろ。</small></h1>
 
     <div class="mp-card">
       <div class="mp-h">友達と遊ぶ<span>2〜4人・それぞれのスマホ/PCで</span></div>
@@ -26,21 +26,23 @@
         <button class="btn" id="btnJoin">部屋に入る</button>
       </div>
       <div class="mp-modes">
-        <div><b>協力</b>周期表の棚を分担。担当外の元素は仲間に「リクエスト」して入れてもらう</div>
-        <div><b>対戦</b>同じ注文を早い者勝ちで奪い合う。難しい物質ほど強い「おじゃま」が飛ぶ</div>
+        <div><b>協力</b>試薬棚と触媒を分担。担当外は仲間に「リクエスト」して入れてもらう</div>
+        <div><b>対戦</b>同じ注文を早い者勝ちで奪い合う。手順の多い反応ほど強い「おじゃま」が飛ぶ</div>
       </div>
     </div>
 
     <div class="sec-title">ひとりで</div>
     <div class="stages" id="stageList"></div>
     <div class="row-btns">
-      <button class="btn sub" id="btnDex">物質図鑑</button>
+      <button class="btn sub" id="btnDex">反応図鑑</button>
       <button class="btn sub" id="btnHow">遊び方</button>
       <button class="btn sub" id="btnMute">音: ON</button>
+      <button class="btn sub" id="btnCoef">係数判定: OFF</button>
     </div>
     <div class="howto">
-      <b>覚え方の仕組み</b>：注文は名前か「性質」で来る。間違えた・時間切れの物質は答えが表示され、次からよく注文される（協力・対戦でも全員の苦手が反映される）。ヒントを使うと報酬は減り、習熟（★）は上がらない。★5で習得。<br>
-      <b>判定は分子式（組成式）</b>：C₂H₆O ならエタノールでもジメチルエーテルでも同じ扱い。
+      <b>覚えること</b>：反応物（濃・希も）、<b>加熱の有無</b>、<b>触媒の種類</b>。MnO₂や濃硫酸は「触媒のとき」と「反応物のとき」があるので要注意。工業的製法は製法名つきで注文される。<br>
+      <b>覚え方の仕組み</b>：間違えた・時間切れの反応は結果画面に反応式と条件が出て、次からよく注文される（協力・対戦でも全員の苦手を反映）。ヒント・余計な加熱/触媒では習熟★は上がらない。<br>
+      <b>係数判定</b>：ONにすると係数まで合わせないと反応しない（京大ラッシュは常にON）。
     </div>
   </section>
 
@@ -67,7 +69,8 @@
     <div class="lob-sec">
       <h4>ステージ</h4>
       <div class="lob-stages" id="lobStages"></div>
-      <label class="toggle" id="lobSplitRow"><input type="checkbox" id="lobSplit" checked>棚を分担する（OFFにすると全員が全元素を使える）</label>
+      <label class="toggle" id="lobSplitRow"><input type="checkbox" id="lobSplit" checked>棚を分担する（OFFにすると全員が全試薬を使える）</label>
+      <label class="toggle"><input type="checkbox" id="lobCoef">係数も判定する（上級。京大ラッシュは常にON）</label>
     </div>
     <div class="lob-foot">
       <button class="btn go" id="btnStart">開店する</button>
@@ -98,8 +101,8 @@
   </section>
 
   <!-- 図鑑 -->
-  <section id="dex" class="screen" aria-label="物質図鑑">
-    <div class="dex-head"><h2>物質図鑑</h2><button class="btn sub" style="flex:0 0 auto;min-width:0" id="btnDexBack">戻る</button></div>
+  <section id="dex" class="screen" aria-label="反応図鑑">
+    <div class="dex-head"><h2>反応図鑑</h2><button class="btn sub" style="flex:0 0 auto;min-width:0" id="btnDexBack">戻る</button></div>
     <div class="dex-sum" id="dexSum"></div>
     <div class="dex-list" id="dexList"></div>
   </section>

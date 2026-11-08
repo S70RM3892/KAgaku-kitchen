@@ -1,19 +1,24 @@
 // 画面・入力・音・セッション（ソロ／ホスト／参加者）
-import {DB,BYID,CATNAME,STAGES,REVIEW,MAIN,DROW,ZN,CAT,fmt,hill} from './data.js';
+import {SUB,RXBY,MENU,MKEYS,TG,CATNAME,STAGES,REVIEW,SHELF,CATS,HEAT,route,eqHTML,condText,nameOf,fOf,cellLabel,cellName,stepsOf,fmt} from './chem.js';
 import * as E from './engine.js';
 import {HostNet,ClientNet,PROTO,normCode} from './net.js';
 const {COLORS,FL,STAMPS}=E;
 
 /* ================= 保存 ================= */
-const SAVE_KEY='chem-kitchen-v1';
-let SAVE={mastery:{},best:{},mute:false,tut:false,name:'',coBest:{},vs:{win:0,lose:0,draw:0}};
-try{const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');if(s)SAVE=Object.assign(SAVE,s);}catch(e){}
+// v2：反応式モード。旧版(v1)からは名前・音・対戦成績だけ引き継ぐ
+const SAVE_KEY='chem-kitchen-v2';
+let SAVE={mastery:{},best:{},mute:false,tut:false,name:'',coBest:{},vs:{win:0,lose:0,draw:0},coef:false};
+try{
+  const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
+  if(s)SAVE=Object.assign(SAVE,s);
+  else{const o=JSON.parse(localStorage.getItem('chem-kitchen-v1')||'null');if(o)Object.assign(SAVE,{name:o.name||'',mute:!!o.mute,vs:o.vs||SAVE.vs});}
+}catch(e){}
 if(!SAVE.coBest)SAVE.coBest={};if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
 function mst(id){return SAVE.mastery[id]||(SAVE.mastery[id]={box:0,seen:0,ok:0,ng:0});}
 function applyMastery(m){
-  if(!Array.isArray(m)||!BYID[m[0]])return;
+  if(!Array.isArray(m)||!MENU[m[0]])return;
   const x=mst(m[0]);
   switch(m[1]){
     case 'seen':x.seen++;break;
@@ -24,15 +29,15 @@ function applyMastery(m){
   }
   persistSoon();
 }
-function myWeights(){const w={};for(const id in SAVE.mastery){const m=SAVE.mastery[id];if(m&&m.seen&&BYID[id])w[id]=m.box|0;}return w;}
+function myWeights(){const w={};for(const id in SAVE.mastery){const m=SAVE.mastery[id];if(m&&m.seen&&MENU[id])w[id]=m.box|0;}return w;}
 function cleanWeights(w){
   const o={};if(!w||typeof w!=='object')return o;
-  for(const id in w)if(BYID[id]&&typeof w[id]==='number')o[id]=Math.max(0,Math.min(5,w[id]|0));
+  for(const id in w)if(MENU[id]&&typeof w[id]==='number')o[id]=Math.max(0,Math.min(5,w[id]|0));
   return o;
 }
 const cleanName=s=>String(s||'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,10)||'ケミスト';
 const myName=()=>cleanName(SAVE.name);
-function reviewPool(){return DB.filter(d=>{const m=SAVE.mastery[d.id];return m&&m.seen&&(m.box<=2||m.ng>m.ok);});}
+function reviewPool(){return MKEYS.filter(k=>{const m=SAVE.mastery[k];return m&&m.seen&&(m.box<=2||m.ng>m.ok);});}
 
 /* ================= 音 ================= */
 let AC=null,MASTER=null,NOISE=null;
@@ -146,18 +151,20 @@ function renderTitle(){
     <div class="best">${SAVE.best.rv?SAVE.best.rv+'点':'—'}</div></button>`;
   $('stageList').innerHTML=h;
   $('btnMute').textContent='音: '+(SAVE.mute?'OFF':'ON');
+  $('btnCoef').textContent='係数判定: '+(SAVE.coef?'ON':'OFF');
   if(document.activeElement!==$('inName'))$('inName').value=SAVE.name||'';
 }
 $('stageList').addEventListener('click',e=>{
   const b=e.target.closest('.stage');if(!b)return;
   audio();
   const v=b.dataset.stage;
-  if(v==='rv'){if(!reviewPool().length&&!Object.keys(myWeights()).length){overlay(`<h2>まだ早い</h2><p>ステージを1回遊ぶと、注文された物質の習熟度が記録され、苦手克服ランが使えるようになる。</p><button class="btn" data-ov="close">閉じる</button>`);return;}startSolo('rv');return;}
+  if(v==='rv'){if(!reviewPool().length&&!Object.keys(myWeights()).length){overlay(`<h2>まだ早い</h2><p>ステージを1回遊ぶと、注文された反応の習熟度が記録され、苦手克服ランが使えるようになる。</p><button class="btn" data-ov="close">閉じる</button>`);return;}startSolo('rv');return;}
   const i=+v;if(!unlocked(i))return;startSolo(STAGES[i].id);
 });
 $('inName').addEventListener('input',e=>{SAVE.name=e.target.value.trim().slice(0,10);persistSoon();});
 $('btnMute').addEventListener('click',()=>{SAVE.mute=!SAVE.mute;persist();audio();if(MASTER)MASTER.gain.value=SAVE.mute?0:0.5;renderTitle();});
 $('btnHow').addEventListener('click',()=>tutorial(false));
+$('btnCoef').addEventListener('click',()=>{SAVE.coef=!SAVE.coef;persist();renderTitle();});
 $('btnDex').addEventListener('click',()=>{renderDex();show('dex');});
 $('btnDexBack').addEventListener('click',()=>{renderTitle();show('title');});
 $('btnHost').addEventListener('click',()=>{audio();createRoom();});
@@ -165,36 +172,43 @@ $('btnJoin').addEventListener('click',()=>{audio();joinDialog('');});
 
 function tutorial(fromGame){
   overlay(`<h2>遊び方</h2><div class="tut">
-    <div class="step"><span class="n">1</span><div><b>周期表をタップ</b>して、黄色い枠のフラスコに原子を入れる。長押しで連続投入。チップをタップで1個戻す。</div></div>
-    <div class="step"><span class="n">2</span><div><b>「加熱」</b>で反応開始。レシピに無い組成だと<b>失敗作</b>になる。</div></div>
-    <div class="step"><span class="n">3</span><div>完成したフラスコをタップして持ち、<b>届けたい注文の伝票をタップ</b>。早いほどチップが増え、連続成功でチップ倍率が最大×4。</div></div>
-    <div class="step"><span class="n">4</span><div>完成品を放置すると<b>燃える</b>。燃えたフラスコは連打で消火。</div></div>
-    <div class="step"><span class="n">5</span><div>伝票の「ヒント」で元素→化学式の順に表示。ただし報酬が減り、習熟★は上がらない。</div></div>
-    <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：「部屋を作る」で4文字のコードとQRが出る。協力は棚の分担とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
+    <div class="step"><span class="n">1</span><div>伝票の物質を作る<b>反応式</b>を考える。<b>試薬棚</b>をタップしてフラスコへ。同じ試薬をもう一度タップで<b>係数+1</b>（濃・希の違いに注意）。</div></div>
+    <div class="step"><span class="n">2</span><div>必要なら<b>触媒</b>（棚の最下段）をタップしてセット。フラスコの<b>🔥ボタン</b>で 常温→加熱→高温・高圧 を切り替え。</div></div>
+    <div class="step"><span class="n">3</span><div><b>「反応」</b>。反応物・触媒・温度が合わないと<b>反応しない</b>（序盤は理由が出る）。いらない加熱や触媒は反応するが報酬×0.7。</div></div>
+    <div class="step"><span class="n">4</span><div>完成したフラスコをタップして持ち、<b>伝票をタップで提供</b>。<b>空きフラスコをタップすると注ぎ込み</b>、次の反応の原料（中間体）になる＝多段階合成。</div></div>
+    <div class="step"><span class="n">5</span><div>完成品を放置すると<b>燃える</b>（連打で消火）。伝票の「ヒント」は反応物→条件の順。使うと報酬が減り習熟★は上がらない。</div></div>
+    <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は棚の分担とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
   </div><button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開店する':'わかった'}</button>`);
 }
 
 /* ================= 図鑑 ================= */
 function renderDex(){
   let h='',seen=0,master=0;
-  ['gas','ppt','inorg','org'].forEach(c=>{
-    const items=DB.filter(d=>d.c===c);
+  ['lab','ppt','ind','org'].forEach(c=>{
+    const items=MKEYS.filter(k=>MENU[k].c===c);
     h+=`<div class="dex-sec"><h4>${CATNAME[c]}</h4><div class="dex-grid">`;
-    items.forEach(d=>{
-      const m=SAVE.mastery[d.id];
+    items.forEach(k=>{
+      const m=SAVE.mastery[k],it=MENU[k];
       if(m&&m.seen){seen++;if(m.box>=5)master++;
-        h+=`<button class="dx" data-dx="${esc(d.id)}"><div class="f">${fmt(d.f)}</div>${esc(d.n)}<div class="s">${stars3(m.box)}</div></button>`;}
+        h+=`<button class="dx" data-dx="${esc(k)}"><div class="f">${fmt(fOf(it.t))}</div>${esc(nameOf(it.t))}${it.proc?`<br><small>${esc(it.proc)}</small>`:''}<div class="s">${stars3(m.box)}</div></button>`;}
       else h+=`<div class="dx unseen"><div class="f">？？？</div>未注文</div>`;
     });
     h+='</div></div>';
   });
   $('dexList').innerHTML=h;
-  $('dexSum').textContent=`出会った物質 ${seen} / ${DB.length}　習得（★5） ${master}　対戦成績 ${SAVE.vs.win}勝${SAVE.vs.lose}敗${SAVE.vs.draw?SAVE.vs.draw+'分':''}`;
+  $('dexSum').textContent=`出会った反応 ${seen} / ${MKEYS.length}　習得（★5） ${master}　対戦成績 ${SAVE.vs.win}勝${SAVE.vs.lose}敗${SAVE.vs.draw?SAVE.vs.draw+'分':''}`;
+}
+function routeHTML(key,usedRx){
+  const rs=usedRx&&RXBY[usedRx]?[RXBY[usedRx]]:route(key);
+  return rs.map((x,i)=>`<div class="eqline">${rs.length>1?`<span class="stepn">${i+1}</span>`:''}${eqHTML(x,MENU[key]&&MENU[key].t)}<span class="cond">［${condText(x)}］</span>${x.note?`<div class="note2">${esc(x.note)}</div>`:''}</div>`).join('');
 }
 $('dexList').addEventListener('click',e=>{
-  const b=e.target.closest('[data-dx]');if(!b)return;const d=BYID[b.dataset.dx],m=mst(d.id);
-  overlay(`<h2>${fmt(d.f)}</h2><p style="margin:0 0 6px;font-weight:800">${esc(d.n)}（${CATNAME[d.c]}）　分子式 ${fmt(hill(d.m))}</p>
-    <div class="rev">${d.p.map(x=>`<div class="it ok">${esc(x)}</div>`).join('')}</div>
+  const b=e.target.closest('[data-dx]');if(!b)return;const k=b.dataset.dx,it=MENU[k];if(!it)return;const m=mst(k);
+  const alts=Object.values(RXBY).filter(x=>!it.via&&x.main===it.t&&x.id!==route(k).at(-1).id);
+  overlay(`<h2>${fmt(fOf(it.t))}</h2><p style="margin:0 0 6px;font-weight:800">${esc(nameOf(it.t))}（${CATNAME[it.c]}${it.proc?'・'+esc(it.proc):''}）</p>
+    <div class="sec-h">作り方</div><div class="rev"><div class="it ok">${routeHTML(k)}</div></div>
+    ${alts.length?`<div class="sec-h">別の作り方</div><div class="rev">${alts.map(x=>`<div class="it ok"><div class="eqline">${eqHTML(x,it.t)}<span class="cond">［${condText(x)}］</span>${x.note?`<div class="note2">${esc(x.note)}</div>`:''}</div></div>`).join('')}</div>`:''}
+    <div class="sec-h">性質</div><div class="rev">${(TG[it.t]?TG[it.t].p:[]).map(x=>`<div class="it ok">${esc(x)}</div>`).join('')}</div>
     <p style="font-size:12px">正解 ${m.ok} 回 / ミス ${m.ng} 回 / 習熟 ${stars3(m.box)}</p>
     <button class="btn" data-ov="close">閉じる</button>`);
 });
@@ -204,8 +218,8 @@ function startSolo(stageId){
   leaveSession(true);
   const st=E.stageById(stageId);
   let pool=null;
-  if(st.pool==='review'){const p=reviewPool();pool=(p.length?p:DB.filter(d=>SAVE.mastery[d.id]&&SAVE.mastery[d.id].seen)).map(d=>d.id);}
-  const cfg={mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(),pool};
+  if(st.pool==='review'){const p=reviewPool();pool=p.length?p:Object.keys(myWeights());}
+  const cfg={mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(),pool,coef:SAVE.coef};
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
   if(!SAVE.tut&&stageId==='s1'){SES.waitTut=true;tutorial(true);}
@@ -269,7 +283,7 @@ function act(a){
 async function createRoom(){
   leaveSession(true);
   const ses={role:'host',me:'p0',pidN:0,code:'',players:[{id:'p0',name:myName(),slot:0,cid:null}],
-    cfg:{mode:'coop',stageId:'s1',split:true},cids:new Map(),seen:new Map(),wts:{p0:myWeights()},acks:{},q:{},S:null,inGame:false};
+    cfg:{mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:myWeights()},acks:{},q:{},S:null,inGame:false};
   SES=ses;
   overlay('<h2>部屋を準備中…</h2><p>接続サーバーにつないでいる。</p>','wait');
   const net=new HostNet({onConnect:cid=>hostOnConnect(ses,cid),onMessage:(cid,m)=>hostOnMessage(ses,cid,m),onClose:cid=>hostOnClose(ses,cid)});
@@ -468,14 +482,14 @@ function inviteLink(code){
 function showLobby(){renderLobby();show('lobby');}
 const RULES={
   coop:`<b>協力のルール</b><ul style="margin:4px 0 0;padding-left:18px">
-    <li><b>棚の分担</b>：自分の担当元素だけ直接入れられる。色が薄く下線のある元素は仲間の担当（下線の色＝担当者）。</li>
-    <li>担当外の元素をタップすると担当者に<b>リクエスト</b>。相手の画面でその元素が光り、相手がタップすると<b>あなたのフラスコ</b>に入る。</li>
+    <li><b>棚の分担</b>：自分の担当の試薬・触媒だけ直接入れられる。色が薄く下線のあるものは仲間の担当（下線の色＝担当者）。</li>
+    <li>担当外をタップすると担当者に<b>リクエスト</b>。相手の画面で光り、相手がタップすると<b>あなたのフラスコ</b>に入る（触媒もセットされる）。加熱ボタンは誰でも押せる。</li>
     <li>フラスコ・注文・得点は全員で共有。<b>40秒ごとに棚替え</b>で担当が入れ替わる。</li>
-    <li>2人以上で原子を入れたフラスコを届けると<b>連携ボーナス×1.2</b>。</li>
+    <li>2人以上で試薬を入れたフラスコを届けると<b>連携ボーナス×1.2</b>。中間体を注いだ人も貢献に数える。</li>
     <li>フラスコを持たずに伝票をタップすると「担当宣言」。💬でスタンプ。人数が多いほど注文も増える。</li></ul>`,
   versus:`<b>対戦のルール</b><ul style="margin:4px 0 0;padding-left:18px">
     <li>注文ボードは全員共通。<b>先に正しく届けた人</b>だけが得点。相手の調合状況は上のバーで見える。</li>
-    <li>届けると相手に<b>おじゃま</b>。原子が多い物質・VIP・4連続以上・ラッシュタイム中ほど強い：1=煙幕 2=在庫切れ 3=引火 4以上=大惨事。狙われるのは首位。</li>
+    <li>届けると相手に<b>おじゃま</b>。手順の多い反応（多段階・触媒・高温高圧）・VIP・4連続以上・ラッシュ中ほど強い：1=煙幕 2=在庫切れ 3=引火 4以上=大惨事。狙われるのは首位。</li>
     <li>おじゃまは<b>3.5秒後</b>に着弾。それまでに自分も届ければ<b>相殺</b>、余りは打ち返せる。</li>
     <li>誤配すると答えは見えるが、その注文は<b>出禁</b>。</li></ul>`
 };
@@ -503,12 +517,13 @@ function renderLobby(){
   $('lobMode').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.mode===cfg.mode);b.disabled=!host;});
   $('lobRules').innerHTML=RULES[cfg.mode]||'';
   let sh='';
-  [...STAGES,{id:'rv',name:'苦手ミックス',desc:'全員の苦手な物質（★2以下）を集中注文'}].forEach(st=>{
+  [...STAGES,{id:'rv',name:'苦手ミックス',desc:'全員の苦手な反応（★2以下）を集中注文'}].forEach(st=>{
     sh+=`<button class="lst${st.id===cfg.stageId?' on':''}" data-st="${st.id}" ${host?'':'disabled'}><b>${esc(st.name)}</b><span>${esc(st.desc)}</span></button>`;
   });
   $('lobStages').innerHTML=sh;
   $('lobSplitRow').style.display=cfg.mode==='coop'?'':'none';
   $('lobSplit').checked=cfg.split!==false;$('lobSplit').disabled=!host;
+  $('lobCoef').checked=!!cfg.coef;$('lobCoef').disabled=!host;
   const st=$('btnStart');
   st.style.display=host?'':'none';
   st.disabled=ps.length<2;
@@ -517,6 +532,7 @@ function renderLobby(){
 $('lobMode').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b||!SES||SES.role!=='host')return;SES.cfg.mode=b.dataset.mode;sfx('tap');lobbyChanged(true);});
 $('lobStages').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(!b||!SES||SES.role!=='host')return;SES.cfg.stageId=b.dataset.st;sfx('tap');lobbyChanged(true);});
 $('lobSplit').addEventListener('change',e=>{if(!SES||SES.role!=='host')return;SES.cfg.split=e.target.checked;lobbyChanged(true);});
+$('lobCoef').addEventListener('change',e=>{if(!SES||SES.role!=='host')return;SES.cfg.coef=e.target.checked;lobbyChanged(true);});
 $('btnStart').addEventListener('click',()=>{audio();hostStartGame();});
 $('btnLeave').addEventListener('click',()=>leaveSession(false));
 $('btnCopy').addEventListener('click',()=>{if(SES&&SES.code)copyText(inviteLink(SES.code));});
@@ -631,29 +647,46 @@ function renderHUD(V){
 }
 function faceFor(r){return r>0.6?'😊':r>0.3?'😐':r>0.15?'😠':'😡';}
 function sigOrders(V){
-  return V.max+'#'+(UI.held!=null)+'#'+V.orders.map(o=>[o.id,E.hintsOf(V,o,me()),o.claim||'',o.ban&&o.ban[me()]?1:0].join(':')).join('|');
+  return V.max+'#'+(UI.held!=null)+'#'+V.coef+'#'+V.orders.map(o=>[o.id,E.hintsOf(V,o,me()),o.claim||'',o.ban&&o.ban[me()]?1:0].join(':')).join('|');
+}
+// 反応物の表示名（濃・希どちらでもよい場合は「塩酸」のようにまとめる）
+function reagentName(e){
+  const n=nameOf(e.ids[0]);
+  return e.ids.length>1?n.replace(/^[濃希]/,''):n;
+}
+function hintHTML(V,key,level,mode){
+  const it=MENU[key],rs=route(key),last=rs[rs.length-1];
+  const chain=rs.length>1?rs.map(x=>fmt(fOf(x.main))).join(' → '):'';
+  const lhs=last.r.map(e=>(V.coef&&e.n>1?e.n:'')+esc(reagentName(e))).join('＋');
+  const cond=esc(condText(last));
+  if(mode==='name'){
+    if(level===1)return chain?`手順：${chain}`:`反応物：${lhs}`;
+    return `${chain?`最後：${lhs}<br>`:''}条件：${cond}`;
+  }
+  if(level===1)return `${esc(nameOf(it.t))} ${fmt(fOf(it.t))}${chain?`<br>手順：${chain}`:''}`;
+  return `${lhs}／${cond}`;
 }
 function renderOrders(V){
   const slots=Math.max(4,V.max),three=slots>4;
   const box=$('orders');box.classList.toggle('three',three);
   let h='';
   for(let k=0;k<slots;k++){
-    const o=V.orders[k];const d=o&&BYID[o.d];
-    if(!d){h+=`<div class="ticket empty"></div>`;continue;}
-    const isName=o.mode==='name';
-    const clue=isName?`<div class="clue name">${esc(d.n)}</div>`:`<div class="clue">${esc(d.p[o.ci]||d.p[0])}</div>`;
-    const hn=E.hintsOf(V,o,me());
+    const o=V.orders[k];const it=o&&MENU[o.k];
+    if(!it){h+=`<div class="ticket empty"></div>`;continue;}
+    const isName=o.mode==='name',tg=TG[it.t]||{p:['?']};
+    const clue=isName?`<div class="clue name">${esc(nameOf(it.t))}</div>`:`<div class="clue">${esc(tg.p[o.ci]||tg.p[0])}</div>`;
+    const hn=E.hintsOf(V,o,me()),steps=stepsOf(o.k);
     let rev='';
-    if(hn>=1)rev+=isName?`元素：${Object.keys(d.m).join('・')}`:esc(d.n);
-    if(hn>=2)rev+=' / '+fmt(d.f);
+    if(hn>=1)rev+=hintHTML(V,o.k,1,o.mode);
+    if(hn>=2)rev+='<br>'+hintHTML(V,o.k,2,o.mode);
     const banned=V.mode==='versus'&&o.ban&&o.ban[me()];
     const cl=V.mode==='coop'&&o.claim&&V.players[o.claim];
     let cls='ticket';if(o.vip)cls+=' vip';if(UI.held!=null&&!banned)cls+=' target';if(cl)cls+=' claimed';if(banned)cls+=' banned';
     h+=`<div class="${cls}" data-o="${o.id}"${cl?` style="--cc:${colorOf(V,o.claim)}"`:''}>
       <div class="t-top"><span class="face" data-face>${faceFor(o.left/o.total)}</span>
-        ${o.vip?'<span class="tag vip">VIP×2</span>':''}<span class="tag">${isName?'名前':'性質'}</span>
+        ${o.vip?'<span class="tag vip">VIP×2</span>':''}<span class="tag">${CATNAME[it.c]}</span>${steps>1?`<span class="tag step">${steps}段階</span>`:''}
         <button class="hint" data-act="hint" ${hn>=2?'disabled':''}>ヒント${hn?hn:''}</button></div>
-      ${clue}${rev?`<div class="reveal">${rev}</div>`:''}
+      ${clue}${it.proc?`<div class="proc">${esc(it.proc)}で</div>`:''}${rev?`<div class="reveal">${rev}</div>`:''}
       ${cl?`<span class="claimtag">${esc(cl.name)}</span>`:''}
       <div class="tbar"><i data-bar></i></div></div>`;
   }
@@ -661,28 +694,38 @@ function renderOrders(V){
 }
 function sigFlasks(V){
   const foc=V.mode==='coop'?V.order.map(p=>V.players[p].left?'':p+'@'+V.players[p].focus).join(','):'';
-  return UI.active+'|'+UI.held+'|'+foc+'|'+myFlasks(V).map(f=>[f.id,f.state,f.atoms.map(a=>a.join('')).join(''),f.prod?f.prod.label:'',f.taps,f.warned?1:0,Object.keys(f.by).join('')].join(':')).join('/');
+  return UI.active+'|'+UI.held+'|'+foc+'|'+myFlasks(V).map(f=>[f.id,f.state,f.items.map(a=>a.join('')).join(','),f.cat,f.heat,f.prod?f.prod.rx+f.prod.over.join(''):'',f.fail?f.fail.why:'',f.taps,f.warned?1:0,Object.keys(f.by).join('')].join(':')).join('/');
+}
+const HEATBTN=['🌡常温','🔥加熱','🔥高温高圧'],HEATSHORT=['常温','加熱','高圧'];
+function itemChip(f,[id,n,poured]){
+  const s=SUB[id];if(!s)return '';
+  return `<span class="chip${poured?' poured':''}" data-act="chip" data-s="${esc(id)}">${!poured&&n>1?`<b class="co">${n}</b>`:''}${fmt(s.f)}${s.cc?`<small>${s.cc}</small>`:''}</span>`;
 }
 function renderFlasks(V){
   const mine=myFlasks(V),n=mine.length,coop=V.mode==='coop';
-  const box=$('flasks');box.style.gridTemplateColumns=`repeat(${n},1fr)`;box.classList.toggle('four',n>=4);
+  const box=$('flasks');box.style.gridTemplateColumns=`repeat(${n},minmax(0,1fr))`;box.classList.toggle('four',n>=4);box.classList.toggle('three',n===3);
+  const HB=n>=4?['常','熱','高']:n>=3?HEATSHORT:HEATBTN;
   let h='';
   mine.forEach(f=>{
     const lab=FL[f.idx];let cls='flask',st='',body='',btns='';
     if(f.state==='idle'){
       if(f.id===UI.active)cls+=' active'+(coop?' mine':'');
-      st=f.atoms.length?'調合中':(f.id===UI.active?'ここに投入':'空き');
-      body=f.atoms.map(([s,c])=>`<span class="chip" data-act="chip" data-s="${s}">${s}${c>1?`<sub>${c}</sub>`:''}</span>`).join('');
-      btns=`<button data-act="react" ${f.atoms.length?'':'disabled'}>加熱</button><button class="dump" data-act="dump" aria-label="捨てる" ${f.atoms.length?'':'disabled'}>捨</button>`;
+      if(UI.held!=null&&UI.held!==f.id)cls+=' pourable';
+      st=UI.held!=null&&UI.held!==f.id?'ここに注げる':f.items.length||f.cat?'調合中':(f.id===UI.active?'ここに投入':'空き');
+      body=f.items.map(it=>itemChip(f,it)).join('<i class="plus">+</i>')+(f.cat?`<span class="chip cat" data-act="chip" data-s="@">${fmt(cellLabel('@'+f.cat))}</span>`:'');
+      const has=f.items.length>0;
+      btns=`<button class="heatb h${f.heat}" data-act="heat" aria-label="温度：${HEAT[f.heat]}">${HB[f.heat]}</button><button data-act="react" ${has?'':'disabled'}>反応</button><button class="dump" data-act="dump" aria-label="捨てる" ${has||f.cat?'':'disabled'}>捨</button>`;
     }else if(f.state==='heat'){
-      st='加熱中…';body=`<div class="product small">${fmt(hill(f.comp))}</div>`;btns=`<span class="note">ぐつぐつ</span>`;
+      st=f.heat?'加熱中…':'反応中…';
+      body=`<div class="eqp">${f.items.map(([id,n,p])=>`${!p&&n>1?n:''}${fmt(fOf(id))}`).join(' + ')} →${f.cat?`<small>${fmt(cellLabel('@'+f.cat))}</small>`:''}</div>`;btns=`<span class="note">${HEAT[f.heat]}</span>`;
     }else if(f.state==='ready'){
+      const x=RXBY[f.prod.rx];
       cls+=UI.held===f.id?' held':' ready';if(f.warned)cls+=' warn';
-      st=UI.held===f.id?'伝票をタップで提供':(f.warned?'焦げそう！':'完成！ タップで持つ');
-      body=`<div class="product">${fmt(f.prod.label)}</div>`;
+      st=UI.held===f.id?'伝票へ提供／空きに注ぐ':(f.warned?'焦げそう！':'完成！ タップで持つ');
+      body=`<div class="product">${fmt(fOf(x.main))}</div><div class="eq">${eqHTML(x,x.main)}</div>${f.prod.over.length?`<div class="overn">${esc(f.prod.over.join('・'))}（×0.7）</div>`:''}`;
       btns=`<button class="dump" data-act="dump" aria-label="捨てる" style="flex:1">捨てる</button>`;
     }else if(f.state==='fail'){
-      cls+=' fail';st='失敗作';body=`<div class="product small">${fmt(f.prod.label)}<br>はレシピに無い</div>`;
+      cls+=' fail';st='反応しない';body=`<div class="product small">${esc(f.fail?f.fail.why:'反応しない')}</div>`;
       btns=`<button data-act="dump">捨てる</button>`;
     }else if(f.state==='fire'){
       cls+=' fire';st=`消火まで ${4-f.taps} 回`;body=`<div class="fire-ico">🔥</div>`;btns=`<span class="note">連打！</span>`;
@@ -697,27 +740,45 @@ function renderFlasks(V){
   });
   box.innerHTML=h;
 }
-/* ---------- 周期表 ---------- */
+/* ---------- 試薬棚 ---------- */
+// ラベル幅（em）の見積もり：セルに収まる文字サイズと改行位置を決める
+function labW(t){let w=0;for(const ch of t){w+=/\d/.test(ch)?0.42:/[A-Z]/.test(ch)?0.66:/[a-z]/.test(ch)?0.52:/[()·]/.test(ch)?0.34:1.0;}return w;}
+function symHTML(lab){
+  if(/[^\x00-\x7f]/.test(lab)&&!/^[濃希]/.test(lab))return {cls:' jp',px:lab.length<=4?11.5:10,html:esc(lab)};
+  let cc='';if(/^[濃希]/.test(lab)){cc=lab[0];lab=lab.slice(1);}
+  let lines=[lab];
+  if(labW(lab)>3.4){
+    let best=null;
+    let d=0;
+    for(let i=0;i<lab.length-1;i++){
+      if(i>=2&&d===0&&/[A-Z(]/.test(lab[i])){
+        const a=lab.slice(0,i),b=lab.slice(i),m=Math.max(labW(a),labW(b));
+        if(!best||m<best.m)best={m,l:[a,b]};
+      }
+      if(lab[i]==='(')d++;else if(lab[i]===')')d--;
+    }
+    if(best)lines=best.l;
+  }
+  const mw=Math.max(...lines.map(labW));
+  let px=Math.min(14,Math.floor(34/mw*10)/10);if(cc)px=Math.min(px,12.5);
+  return {cls:'',px,html:(cc?`<small class="cc">${cc}</small>`:'')+lines.map(fmt).join('<br>')};
+}
 function buildTable(){
-  let h='';
-  ['1','2','13','14','15','16','17','18'].forEach(g=>h+=`<div class="glab">${g}</div>`);
-  MAIN.forEach((row,r)=>{
-    row.forEach((s,c)=>{
-      if(r===0&&c===1){h+=`<div class="gap-note">周期表の棚（典型元素）／下段は遷移元素</div>`;return;}
-      if(r===0&&c>1&&c<7)return;
-      if(!s)return;
-      h+=cellHTML(s);
-    });
-  });
-  h+=`<div class="dsep"></div>`;
-  DROW.forEach(s=>h+=cellHTML(s));
+  let h=`<div class="shelf-cap">試薬棚：タップでフラスコへ／もう一度で係数+1</div>`;
+  SHELF.forEach(row=>row.forEach(id=>{h+=cellHTML(id);}));
+  h+=`<div class="shelf-cap cat">触媒・脱水剤（矢印の上に書くもの）：タップでセット／もう一度で外す</div>`;
+  CATS.forEach(c=>{h+=cellHTML('@'+c);});
   $('ptable').innerHTML=h;$('ptable').classList.remove('dark');
 }
-function cellHTML(s){return `<button class="cell c-${CAT[s]}" data-el="${s}" aria-label="${s}"><span class="z">${ZN[s]}</span><span class="sym">${s}</span><span class="bd"></span></button>`;}
+function cellHTML(key){
+  const y=symHTML(cellLabel(key));
+  const kind=key[0]==='@'?'cat':(SUB[key].k||'salt');
+  return `<button class="cell r-${kind}" data-el="${esc(key)}" aria-label="${esc(cellName(key))}" title="${esc(cellName(key))}"><span class="sym${y.cls}" style="font-size:${y.px}px">${y.html}</span><span class="bd"></span></button>`;
+}
 function sigCells(V){
   const own=E.owners(V);
   const rq=V.reqs.filter(r=>r.to===me()||r.from===me()).map(r=>r.s+r.f+r.from).join();
-  const lk=E.ALL_EL.filter(s=>E.isLocked(V,me(),s)).join();
+  const lk=E.CELLS_ALL.filter(s=>E.isLocked(V,me(),s)).join();
   return (own?V.rot+V.order.filter(p=>!V.players[p].left).join():'-')+'|'+rq+'|'+lk+'|'+E.isDark(V,me());
 }
 function renderCells(V){
@@ -742,11 +803,11 @@ function renderCells(V){
 /* ---------- マルチプレイ表示 ---------- */
 function miniFlasks(V,pid){
   return V.flasks.filter(f=>f.owner===pid).map(f=>
-    f.state==='ready'?`<b class="rd">${fmt(f.prod.label)}</b>`:
-    f.state==='heat'?`<b class="ht">${fmt(hill(f.comp))}</b>`:
+    f.state==='ready'?`<b class="rd">${fmt(fOf(f.prod.main))}</b>`:
+    f.state==='heat'?'<b class="ht">反応中</b>':
     f.state==='fire'?'<b class="fr">🔥</b>':
     f.state==='fail'?'<b>×</b>':
-    f.atoms.length?'<b>…</b>':'').join('');
+    f.items.length?'<b>…</b>':'').join('');
 }
 function sigMP(V){
   return V.order.map(p=>{const P=V.players[p];return [p,P.name,P.score,P.left?1:0,V.mode==='versus'?miniFlasks(V,p):''].join(':');}).join('|');
@@ -823,18 +884,22 @@ $('ptable').addEventListener('pointerdown',e=>{
 $('ptable').addEventListener('contextmenu',e=>e.preventDefault());
 function tryAdd(s,cell){
   const V=view();if(!playable(V))return false;const M=me();
-  if(E.isLocked(V,M,s)){sfx('lock');toast(`${s} は在庫切れ`,'ng');return false;}
+  if(E.isLocked(V,M,s)){sfx('lock');toast(`${fmt(cellLabel(s))} は在庫切れ`,'ng');return false;}
   ensureActive(V);
   const own=E.owners(V),req=!!own&&own[s]!==M;
   const pendingToMe=V.reqs.some(r=>r.to===M&&r.s===s);
   const f=V.flasks.find(x=>x.id===UI.active);
   if(!pendingToMe&&(!f||f.state!=='idle'||!E.canUse(V,f,M))){toast('空いているフラスコがない','ng');sfx('lock');return false;}
   if(req&&V.reqs.filter(r=>r.from===M).length>=8){toast('リクエストは8個まで','ng');sfx('lock');return false;}
-  if(!req&&!pendingToMe&&f){const x=f.atoms.find(y=>y[0]===s);if(x&&x[1]>=40)return false;}
+  if(!req&&!pendingToMe&&f&&s[0]!=='@'){
+    const x=f.items.find(y=>y[0]===s);
+    if(x&&(x[2]||x[1]>=E.MAX_COEF))return false;
+    if(!x&&f.items.length>=E.MAX_SPECIES){toast(`試薬は${E.MAX_SPECIES}種類まで`,'ng');return false;}
+  }
   act({t:'add',s,f:f?f.id:null});
-  sfx(req?'req':'tap');
+  sfx(req?'req':s[0]==='@'?'pop':'tap');
   if(cell){cell.classList.add('hit');setTimeout(()=>cell.classList.remove('hit'),80);}
-  return true;
+  return s[0]!=='@';
 }
 $('flasks').addEventListener('pointerdown',e=>{
   const V=view();if(!playable(V))return;
@@ -842,9 +907,14 @@ $('flasks').addEventListener('pointerdown',e=>{
   e.preventDefault();
   const id=+card.dataset.f,f=V.flasks.find(x=>x.id===id);if(!f)return;
   const b=e.target.closest('[data-act]');
+  // 完成品を持っているときに空きフラスコをタップ → 注ぎ込む（中間体として使う）
+  if(UI.held!=null&&UI.held!==id&&f.state==='idle'&&!(b&&b.dataset.act!=='chip')){
+    act({t:'pour',f:UI.held,to:id});UI.held=null;setActive(id);sfx('whoosh');return;
+  }
   if(b){
     const a=b.dataset.act;
-    if(a==='react'){if(f.state==='idle'&&f.atoms.length){act({t:'react',f:id});sfx('react');}}
+    if(a==='react'){if(f.state==='idle'&&f.items.length){act({t:'react',f:id});sfx('react');}}
+    else if(a==='heat'){if(f.state==='idle'){act({t:'heat',f:id,h:(f.heat+1)%3});sfx('tap');setActive(id);}}
     else if(a==='dump'){act({t:'dump',f:id});sfx('whoosh');if(UI.held===id)UI.held=null;}
     else if(a==='chip'&&f.state==='idle'){act({t:'chip',f:id,s:b.dataset.s});sfx('pop');}
     return;
@@ -926,24 +996,28 @@ function reviewHTML(r,mode){
   const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
   const ng=[],ok=[];const seen=new Set();
   (r.log||[]).slice().reverse().forEach(l=>{
-    const d=BYID[l.d];if(!d||seen.has(l.d))return;seen.add(l.d);
+    const it=MENU[l.k];if(!it||seen.has(l.k))return;seen.add(l.k);
     const mine=mode!=='versus'||l.by===M;
-    if(l.ok&&!l.hinted&&mine)ok.push(l);else ng.push(l);
+    if(l.ok&&!l.hinted&&!(l.over&&l.over.length)&&mine)ok.push(l);else ng.push(l);
   });
+  const title=it=>`<b>${fmt(fOf(it.t))}</b>　${esc(nameOf(it.t))}${it.proc?`（${esc(it.proc)}）`:''}`;
   let h='';
   if(ng.length){
     h+=`<div class="sec-h">要復習（次回よく注文される）</div><div class="rev">`+ng.map(l=>{
-      const d=BYID[l.d];
+      const it=MENU[l.k];
       let why;
-      if(l.ok)why=l.by===M||mode==='solo'?'ヒント使用':`${esc(nm(l.by))} が提供`;
-      else if(l.given)why=`${fmt(esc(l.given))} を出した${mode!=='solo'&&l.by!==M?`（${esc(nm(l.by))}）`:''}`;
+      if(l.ok){
+        if(l.by!==M&&mode!=='solo')why=`${esc(nm(l.by))} が提供`;
+        else why=[l.hinted?'ヒント使用':'',...(l.over||[])].filter(Boolean).map(esc).join('・');
+      }else if(l.given){const g=RXBY[l.given];why=`${g?fmt(fOf(g.main)):'?'} を出した${mode!=='solo'&&l.by!==M?`（${esc(nm(l.by))}）`:''}`;}
       else why=esc(l.why||'');
-      return `<div class="it"><b>${fmt(d.f)}</b>　${esc(d.n)}　<span class="why">${why}</span><br>${esc(d.p.join('／'))}</div>`;
+      return `<div class="it">${title(it)}　<span class="why">${why}</span>${routeHTML(l.k)}</div>`;
     }).join('')+`</div>`;
   }
   if(ok.length){
     h+=`<div class="sec-h">ノーヒントで正解</div><div class="rev">`+ok.map(l=>{
-      const d=BYID[l.d],m=mst(d.id);return `<div class="it ok"><b>${fmt(d.f)}</b>　${esc(d.n)}　<span style="color:#e0a100">${stars3(m.box)}</span></div>`;}).join('')+`</div>`;
+      const it=MENU[l.k],m=mst(l.k);
+      return `<div class="it ok">${title(it)}　<span style="color:#e0a100">${stars3(m.box)}</span>${routeHTML(l.k,l.rx)}</div>`;}).join('')+`</div>`;
   }
   return h;
 }
@@ -981,7 +1055,7 @@ function coopResults(r){
     <div class="stats"><div>提供<b>${r.team.served}</b></div><div>失敗<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
     <div class="sec-h">貢献</div><div class="rank">`+ps.map(p=>`<div class="rk" style="--pc:${COLORS[p.slot%4]}"><div class="no">${p.id===mvp?'👑':''}</div>
       <div><div class="nm">${esc(p.name)}${p.id===me()?'（あなた）':''}${p.id===mvp?'<span class="mvp">MVP</span>':''}${p.left?'（退出）':''}</div>
-      <div class="sub">提供 ${p.served}・投入した原子 ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`).join('')+`</div>`;
+      <div class="sub">提供 ${p.served}・入れた試薬 ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`).join('')+`</div>`;
   h+=nightNote()+reviewHTML(r,'coop')+mpButtons();
   overlay(h,'result');
 }
