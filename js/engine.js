@@ -100,7 +100,7 @@ export function createGame(cfg){
     spawn:st.spawn/(1+(coop?0.45:vs?0.5:0)*(n-1))*B.spawn,
     life:st.life*(split?1.12:1)*B.life,
     clue:st.clue,vip:!!st.vip,blackout:!!st.blackout,stockout:!!st.stockout,spread:!!st.spread,
-    coef:g==='rx'&&!!(st.coef||cfg.coef),fb:st.fb??1,
+    coef:g==='rx'&&!!(st.coef||cfg.coef),fb:st.fb??1,auto:!!cfg.auto,
     stars:st.stars?st.stars.map(x=>Math.round(x*(coop?1+0.55*(n-1):1)*B.star/10)*10):null,
     order:pids,players:{},orders:[],reqs:[],
     team:{score:0,combo:0,maxCombo:0,served:0,failed:0},
@@ -349,6 +349,19 @@ function putIn(S,p,k,pid){
   p.by[pid]=(p.by[pid]||0)+1;
   return true;
 }
+// 自動精製：材料と条件がそろって「この客に出せる物（または途中の中間体）」ができる状態になったら自動で反応させる
+function wouldWork(S,o,p){
+  if(!p.items.length)return false;
+  if(S.g==='atom'){const m={};p.items.forEach(([s,c])=>m[s]=c);return !!A.BYID[o.k]&&A.keyOf(m)===A.BYID[o.k].k;}
+  const r=judge(p.items,p.cat,p.heat,S.coef);if(!r.ok)return false;
+  return serves(o.k,r.rx)||usefulFor(o.k).has(RXBY[r.rx].main);
+}
+function startReact(S,p,pid){
+  if(S.g==='atom'){const m={};p.items.forEach(([s,c])=>m[s]=c);p.res={comp:m};p.dur=0.9+0.05*A.atomCount(m);}
+  else{p.res=judge(p.items,p.cat,p.heat,S.coef);p.dur=durOf(p.items,p.heat,p.cat);}
+  p.state='heat';p.t=0;p.rb=pid;
+}
+function maybeAuto(S,o,p,pid){if(S.auto&&o&&p&&p.state==='idle'&&wouldWork(S,o,p)){startReact(S,p,pid);emit(S,pid,{s:'react'});}}
 // 操作対象の鍋（a.o = 注文ID）
 function myPot(S,pid,a,need){
   const o=orderById(S,a.o);if(!o)return null;
@@ -380,26 +393,25 @@ const ACT={
     if(!putIn(S,tgt.p,k,pid))return;
     P.atoms++;
     if(rq){S.reqs.splice(S.reqs.indexOf(rq),1);emit(S,rq.from,{s:'gift'});}
+    maybeAuto(S,tgt.o,tgt.p,rq?rq.from:pid);
   },
   chip(S,pid,P,a){
     const t=myPot(S,pid,a,false);if(!t||t.p.state!=='idle')return;
-    if(a.s==='@'){t.p.cat=null;return;}
+    if(a.s==='@'){t.p.cat=null;maybeAuto(S,t.o,t.p,pid);return;}
     const x=t.p.items.find(y=>y[0]===a.s);if(!x)return;
     x[1]--;if(x[1]<=0||x[2])t.p.items=t.p.items.filter(y=>y!==x);
+    maybeAuto(S,t.o,t.p,pid);
   },
   heat(S,pid,P,a){
     if(S.g!=='rx')return;
     const t=myPot(S,pid,a,true);if(!t||t.p.state!=='idle')return;
     const h=a.h|0;if(h<0||h>2)return;t.p.heat=h;
+    maybeAuto(S,t.o,t.p,pid);
   },
   react(S,pid,P,a){
     const t=myPot(S,pid,a,false);if(!t)return;const p=t.p;
     if(p.state!=='idle'||!p.items.length)return;
-    if(S.g==='atom'){
-      const m={};p.items.forEach(([s,c])=>m[s]=c);
-      p.res={comp:m};p.dur=0.9+0.05*A.atomCount(m);
-    }else{p.res=judge(p.items,p.cat,p.heat,S.coef);p.dur=durOf(p.items,p.heat,p.cat);}
-    p.state='heat';p.t=0;p.rb=pid;
+    startReact(S,p,pid);
   },
   dump(S,pid,P,a){
     const t=myPot(S,pid,a,false);if(!t||t.p.state==='fire'||t.p.state==='heat')return;

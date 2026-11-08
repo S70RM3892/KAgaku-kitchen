@@ -173,3 +173,24 @@ for(const mode of ['solo','versus'])for(const st of ['s1','s5']){
   console.log('busy ok',BUSY.slice(1).map(b=>b.name).join('/'));
 }
 console.log('ALL PASS');
+// ---- 自動精製 ----
+{
+  const S=createGame({mode:'solo',stageId:'s1',players:[{id:'p0',name:'x'}],auto:true});begin(S);
+  const o=force(S,'O2');
+  apply(S,'p0',{t:'add',s:'H2O2',o:o.id});assert.equal(potOf(S,o,'p0').state,'idle','not yet (no catalyst)');
+  apply(S,'p0',{t:'add',s:'@MnO2',o:o.id});assert.equal(potOf(S,o,'p0').state,'heat','auto react when complete');
+  settle(S,o,'p0');assert.ok(!S.orders.includes(o),'auto refined and served');
+  // 間違った組み合わせでは勝手に反応しない
+  const o2=force(S,'CO2');apply(S,'p0',{t:'add',s:'CaCO3',o:o2.id});apply(S,'p0',{t:'add',s:'H2SO4_d',o:o2.id});
+  assert.equal(potOf(S,o2,'p0').state,'idle');
+  // 多段階：中間体まで自動
+  const S3=createGame({mode:'solo',stageId:'s3',players:[{id:'p0',name:'x'}],auto:true});begin(S3);
+  const o3=force(S3,'H2SO4@h2so4');
+  ['S8','O2'].forEach(s=>apply(S3,'p0',{t:'add',s,o:o3.id}));apply(S3,'p0',{t:'heat',o:o3.id,h:1});
+  assert.equal(potOf(S3,o3,'p0').state,'heat');settle(S3,o3,'p0');assert.equal(potOf(S3,o3,'p0').items[0][0],'SO2');
+  // 組成モード
+  const SA=createGame({g:'atom',mode:'solo',stageId:'s1',players:[{id:'p0',name:'x'}],auto:true});begin(SA);
+  const oa=force(SA,'H2O');['H','O'].forEach(s=>apply(SA,'p0',{t:'add',s,o:oa.id}));assert.equal(potOf(SA,oa,'p0').state,'idle');
+  apply(SA,'p0',{t:'add',s:'H',o:oa.id});assert.equal(potOf(SA,oa,'p0').state,'heat');
+  console.log('auto refine ok');
+}

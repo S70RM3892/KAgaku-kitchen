@@ -46,6 +46,7 @@
     <div class="row-btns">
       <button class="btn sub" id="btnDex">反応図鑑</button>
       <button class="btn sub" id="btnHow">遊び方</button>
+      <button class="btn sub" id="btnSettings">⚙ 設定</button>
       <button class="btn sub" id="btnMute">音: ON</button>
       <button class="btn sub" id="btnCoef">係数判定: OFF</button>
       <button class="btn sub" data-fs>⛶ 全画面・横向き</button>
@@ -83,6 +84,7 @@
       <h4 style="margin-top:10px">忙しさ</h4>
       <div class="seg busy" id="lobBusy"></div><p class="busydesc note"></p>
       <label class="toggle" id="lobSplitRow"><input type="checkbox" id="lobSplit" checked>棚を分担する（OFFにすると全員が全試薬を使える）</label>
+      <label class="toggle"><input type="checkbox" id="lobAuto">必要なものがそろったら自動で精製する</label>
       <label class="toggle" id="lobCoefRow"><input type="checkbox" id="lobCoef">係数も判定する（上級。京大ラッシュは常にON）</label>
     </div>
     <div class="lob-foot">
@@ -108,8 +110,7 @@
       <button class="stampbtn" id="btnStamp" aria-label="スタンプ">💬</button>
     </div>
     <div class="orders" id="orders"></div>
-    <div class="flasks" id="flasks"></div>
-    <div class="ptable" id="ptable"></div>
+    <div class="ptable" id="ptable"><div class="half L" id="ptL"></div><div class="half R" id="ptR"></div></div>
     <div class="stamps" id="stamps"></div>
     <div class="feed" id="feed"></div>
     <div class="count" id="count"></div>

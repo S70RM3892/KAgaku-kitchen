@@ -9,7 +9,7 @@ const {COLORS,STAMPS}=E;
 // モードごとに習熟度・ベストを分けて持つ。rx=反応式モード、atom=組成モード（旧版 v1 の記録を引き継ぐ）
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
-let SAVE={name:'',mute:false,tut:false,tutA:false,coef:false,g:'rx',busy:2,vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -26,6 +26,9 @@ for(const g of ['rx','atom']){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
 if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(SAVE.g!=='atom')SAVE.g='rx';
 SAVE.busy=Math.min(5,Math.max(1,(SAVE.busy|0)||2));
+// 表示・操作の設定（自分で選べる）
+const UI_DEF={auto:false,names:false,colors:true,fs:'m',layout:'split',repeat:true,adv:true,bgm:true,vib:true};
+SAVE.ui=Object.assign({},UI_DEF,SAVE.ui||{});
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
 const SV=g=>SAVE[g==='atom'?'atom':'rx'];
@@ -219,9 +222,9 @@ $('btnJoin').addEventListener('click',()=>{audio();joinDialog('');});
 function tutorial(fromGame,g=SAVE.g){
   if(g==='atom'){tutorialA(fromGame);return;}
   overlay(`<h2>遊び方（反応式モード）</h2><div class="tut">
-    <div class="step"><span class="n">1</span><div><b>伝票（客）をタップして選ぶ</b>。客ごとに専用の鍋がある。選んだ客は左の大きな鍋に表示される。</div></div>
+    <div class="step"><span class="n">1</span><div>画面は<b>左右の端に試薬棚</b>、<b>中央に客（伝票）の列</b>。客ごとに専用の鍋があり、中身はいつでも伝票に見える。<b>伝票をタップして選ぶ</b>と、棚の上に「入れ先」が出る。</div></div>
     <div class="step"><span class="n">2</span><div><b>試薬棚</b>をタップして鍋へ。同じ試薬をもう一度で<b>係数+1</b>（濃・希に注意）。必要なら<b>触媒</b>（棚の最下段）、<b>🔥ボタン</b>で 常温→加熱→高温・高圧。</div></div>
-    <div class="step"><span class="n">3</span><div><b>「反応」</b>。注文どおりの物質ができたら<b>自動で提供</b>。途中の<b>中間体</b>（SO₂など）ができたら鍋に残るので、続けて次の反応へ＝多段階合成。</div></div>
+    <div class="step"><span class="n">3</span><div>伝票の<b>「反応」</b>。注文どおりの物質ができたら<b>自動で提供</b>（⚙設定の「自動精製」をONにすると、そろった瞬間に反応する）。途中の<b>中間体</b>（SO₂など）ができたら鍋に残るので、続けて次の反応へ＝多段階合成。</div></div>
     <div class="step"><span class="n">4</span><div>条件が合わないと<b>反応しない</b>（序盤は理由が出る）。<b>違う物</b>ができたら−5。失敗した鍋は放置すると<b>燃える</b>（同じ伝票をもう一度タップで消火）。いらない加熱・触媒は報酬×0.7。</div></div>
     <div class="step"><span class="n">5</span><div>反応中は次の客に自動で切り替わるので、何人分も並行して作れる。伝票の「ヒント」は反応物→条件の順（報酬が減り習熟★は上がらない）。</div></div>
     <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は棚の分担とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
@@ -230,9 +233,9 @@ function tutorial(fromGame,g=SAVE.g){
 
 function tutorialA(fromGame){
   overlay(`<h2>遊び方（組成モード）</h2><div class="tut">
-    <div class="step"><span class="n">1</span><div><b>伝票（客）をタップして選ぶ</b>。客ごとに専用の鍋がある。</div></div>
-    <div class="step"><span class="n">2</span><div><b>周期表（1〜18族×第1〜7周期）をタップ</b>して鍋に原子を入れる。長押しで連続投入。チップをタップで1個戻す。タップした元素の<b>名前・周期・族・分類</b>が表の上に出る。</div></div>
-    <div class="step"><span class="n">3</span><div><b>「加熱」</b>。注文どおりの分子式なら<b>自動で提供</b>。レシピに無い組成は失敗、別の物質ができたら−5。</div></div>
+    <div class="step"><span class="n">1</span><div>周期表は<b>左端に1〜9族、右端に10〜18族</b>。中央が客（伝票）の列で、客ごとの鍋の中身はいつでも見える。<b>伝票をタップして選ぶ</b>。</div></div>
+    <div class="step"><span class="n">2</span><div><b>周期表をタップ</b>して選んだ客の鍋に原子を入れる。長押しで連続投入。チップをタップで1個戻す。タップした元素の<b>名前・周期・族・分類</b>が表の上に出る。</div></div>
+    <div class="step"><span class="n">3</span><div>伝票の<b>「加熱」</b>。注文どおりの分子式なら<b>自動で提供</b>（⚙設定の「自動精製」ONなら、そろった瞬間に反応）。レシピに無い組成は失敗、別の物質ができたら−5。</div></div>
     <div class="step"><span class="n">4</span><div>失敗した鍋は放置すると<b>燃える</b>（同じ伝票をもう一度タップで消火）。停電中は元素記号が消えるので<b>位置</b>で探す。</div></div>
     <div class="step"><span class="n">5</span><div>伝票の「ヒント」で元素→化学式の順に表示。ただし報酬が減り、習熟★は上がらない。</div></div>
     <div class="step"><span class="n">6</span><div><b>友達と遊ぶ</b>：協力は族ごとの分担（2人なら奇数族と偶数族）とリクエスト、対戦は注文の奪い合いとおじゃま。</div></div>
@@ -301,7 +304,7 @@ function startSolo(stageId,g=SAVE.g){
   const st=E.stageById(g,stageId);
   let pool=null;
   if(st.pool==='review'){const p=reviewPool(g);pool=p.length?p:Object.keys(myWeights(g));}
-  const cfg={g,busy:SAVE.busy,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
+  const cfg={g,busy:SAVE.busy,auto:SAVE.ui.auto,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
   if(!(g==='atom'?SAVE.tutA:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
@@ -341,7 +344,7 @@ function handleEvent(e){
   if(e.m)applyMastery(e.m);
   if(e.s)sfx(e.s);
   if(e.h)toast(safe(e.h),e.k,e.c);
-  if(e.s==='hit'){const g=$('game');g.classList.remove('game-flash');void g.offsetWidth;g.classList.add('game-flash');if(navigator.vibrate)try{navigator.vibrate(120);}catch(x){}}
+  if(e.s==='hit'){const g=$('game');g.classList.remove('game-flash');void g.offsetWidth;g.classList.add('game-flash');if(SAVE.ui.vib&&navigator.vibrate)try{navigator.vibrate(120);}catch(x){}}
 }
 function onGameOver(){
   const ses=SES;stopHostLoop();
@@ -365,7 +368,7 @@ function act(a){
 async function createRoom(){
   leaveSession(true);
   const ses={role:'host',me:'p0',pidN:0,code:'',players:[{id:'p0',name:myName(),slot:0,cid:null}],
-    cfg:{g:SAVE.g,busy:SAVE.busy,mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:allWeights()},acks:{},q:{},S:null,inGame:false};
+    cfg:{g:SAVE.g,busy:SAVE.busy,auto:SAVE.ui.auto,mode:'coop',stageId:'s1',split:true,coef:false},cids:new Map(),seen:new Map(),wts:{p0:allWeights()},acks:{},q:{},S:null,inGame:false};
   SES=ses;
   overlay('<h2>部屋を準備中…</h2><p>接続サーバーにつないでいる。</p>','wait');
   const net=new HostNet({onConnect:cid=>hostOnConnect(ses,cid),onMessage:(cid,m)=>hostOnMessage(ses,cid,m),onClose:cid=>hostOnClose(ses,cid)});
@@ -619,6 +622,7 @@ function renderLobby(){
   $('lobSplitRow').style.display=cfg.mode==='coop'?'':'none';
   $('lobSplit').checked=cfg.split!==false;$('lobSplit').disabled=!host;
   renderBusy($('lobBusy'),cfg.busy||2,!host);
+  $('lobAuto').checked=!!cfg.auto;$('lobAuto').disabled=!host;
   $('lobCoef').checked=!!cfg.coef;$('lobCoef').disabled=!host;$('lobCoefRow').style.display=g==='rx'?'':'none';
   const st=$('btnStart');
   st.style.display=host?'':'none';
@@ -626,6 +630,7 @@ function renderLobby(){
   $('lobWait').textContent=host?(ps.length<2?'友達が入るのを待っている（2〜4人）':`${ps.length}人そろった。開店しよう`):(ses.inGame?'ゲーム中。終わるまで待って':'ホストが開店するのを待っている…');
 }
 $('lobBusy').addEventListener('click',e=>{const b=e.target.closest('[data-b]');if(!b||!SES||SES.role!=='host')return;SES.cfg.busy=+b.dataset.b;SAVE.busy=SES.cfg.busy;persist();sfx('tap');lobbyChanged(true);});
+$('lobAuto').addEventListener('change',e=>{if(!SES||SES.role!=='host')return;SES.cfg.auto=e.target.checked;lobbyChanged(true);});
 $('lobGame').addEventListener('click',e=>{const b=e.target.closest('[data-g]');if(!b||!SES||SES.role!=='host')return;const g=b.dataset.g==='atom'?'atom':'rx';if(SES.cfg.g!==g){SES.cfg.g=g;SES.cfg.stageId='s1';SAVE.g=g;persist();}sfx('tap');lobbyChanged(true);});
 $('lobMode').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b||!SES||SES.role!=='host')return;SES.cfg.mode=b.dataset.mode;sfx('tap');lobbyChanged(true);});
 $('lobStages').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(!b||!SES||SES.role!=='host')return;SES.cfg.stageId=b.dataset.st;sfx('tap');lobbyChanged(true);});
@@ -717,13 +722,14 @@ function setSel(id){
 function render(V){
   ensureSel(V);
   const live=V.running&&!V.paused&&!V.over;
-  if(live&&!BGM.on&&AC)bgmStart();else if(!live&&BGM.on)bgmStop();
+  const bgmOn=live&&SAVE.ui.bgm;
+  if(bgmOn&&!BGM.on&&AC)bgmStart();else if(!bgmOn&&BGM.on)bgmStop();
   BGM.tempo=V.rush?150:124;
   if(V.paused&&!UI.pauseShown){UI.pauseShown=true;showPause(V);}
   else if(!V.paused&&UI.pauseShown){UI.pauseShown=false;if(OVK==='pause')closeOverlay();}
   renderHUD(V);
   const so=sigOrders(V);if(so!==UI.sig.o){UI.sig.o=so;renderOrders(V);}
-  const sf=sigPot(V);if(sf!==UI.sig.f){UI.sig.f=sf;renderPot(V);}
+  const sf=sigTarget(V);if(sf!==UI.sig.f){UI.sig.f=sf;renderTarget(V);}
   const sc=sigCells(V);if(sc!==UI.sig.c){UI.sig.c=sc;renderCells(V);}
   if(V.mode!=='solo'){const sm=sigMP(V);if(sm!==UI.sig.m){UI.sig.m=sm;renderMP(V);}renderRot(V);}
   renderIncoming(V);
@@ -735,7 +741,7 @@ function showPause(V){
   const who=P&&V.mode!=='solo'?`<b>${esc(P.name)}</b> が止めた。`:'';
   const canQuit=SES.role!=='client';
   overlay(`<h2>一時停止</h2><p>${who}残り ${fmtTime(V.t)}・${V.mode==='versus'?(V.players[me()].score+'点'):(V.team.score+'点')}</p>
-    <div class="row-btns"><button class="btn go" data-ov="resume">再開</button>${canQuit?`<button class="btn sub" data-ov="quit">${SES.role==='host'?'ロビーへ戻る':'店じまい'}</button>`:`<button class="btn sub" data-ov="leave">退出</button>`}</div>`,'pause');
+    <div class="row-btns"><button class="btn go" data-ov="resume">再開</button><button class="btn sub" data-ov="settings">⚙ 設定</button>${canQuit?`<button class="btn sub" data-ov="quit">${SES.role==='host'?'ロビーへ戻る':'店じまい'}</button>`:`<button class="btn sub" data-ov="leave">退出</button>`}</div>`,'pause');
 }
 function renderHUD(V){
   const P=V.players[me()];
@@ -755,51 +761,60 @@ function sigOrders(V){
   const foc=V.mode==='coop'?V.order.map(p=>V.players[p].left?'':p+'@'+V.players[p].focus).join(','):'';
   return V.max+'#'+UI.sel+'#'+V.coef+'#'+foc+'#'+V.orders.map(o=>[o.id,E.hintsOf(V,o,me()),Object.entries(o.pots).map(([k,p])=>k+'='+potSig(p)).join(';')].join(':')).join('|');
 }
-// 伝票に載せる鍋の様子（小さく）
-function cardPot(V,o){
-  const p=myPot(V,o),st=potState(p);
-  let h='';
-  if(st==='heat')h=`<span class="cp heat">反応中<i data-pbar></i></span>`;
-  else if(st==='fail')h=`<span class="cp fail">✗ ${esc(p.fail&&p.fail.why||'失敗')}</span>`;
-  else if(st==='fire')h=`<span class="cp fire">🔥 燃えてる</span>`;
-  else if(p&&(p.items.length||p.cat))h=`<span class="cp mix">${p.items.map(([id,n,x])=>`${!x&&n>1?n:''}${fmt(V.g==='atom'?id:fOf(id))}`).join(' ')}${p.cat?' ／触媒':''}${p.mid?' （中間体）':''}</span>`;
-  // 協力：他の人が選んでいる印、対戦：相手の鍋の進み具合
-  let who='';
-  if(V.mode==='coop')who=V.order.filter(q=>q!==me()&&!V.players[q].left&&V.players[q].focus===o.id).map(q=>`<i style="--dc:${colorOf(V,q)}"></i>`).join('');
-  else if(V.mode==='versus')who=V.order.filter(q=>q!==me()&&!V.players[q].left).map(q=>{const op=o.pots[q],s2=potState(op);if(!op||(!op.items.length&&s2==='idle'))return '';return `<i class="${s2==='heat'?'hot':''}" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}"></i>`;}).join('');
-  return `<div class="cpot">${h}${who?`<span class="who">${who}</span>`:''}</div>`;
+// 鍋の中身（全員がいつでも見えるように伝票に大きく載せる）
+const HEATBTN=['🌡常温','🔥加熱','🔥高温高圧'];
+function itemChip(V,[id,n,poured]){
+  if(V.g==='atom')return `<span class="chip" data-act="chip" data-s="${esc(id)}">${esc(id)}${n>1?`<sub>${n}</sub>`:''}</span>`;
+  const s=SUB[id];if(!s)return '';
+  return `<span class="chip${poured?' poured':''}" data-act="chip" data-s="${esc(id)}">${!poured&&n>1?`<b class="co">${n}</b>`:''}${fmt(s.f)}${s.cc?`<small>${s.cc}</small>`:''}</span>`;
+}
+function potInner(V,o,p){
+  const st=potState(p),atom=V.g==='atom',items=p?p.items:[];
+  if(st==='heat')return `<div class="pin heat"><div class="eqp">${items.map(([id,n,x])=>`${!x&&n>1?n:''}${fmt(atom?id:fOf(id))}`).join(atom?' ':' + ')}${atom?'':` →${p.cat?`<small>${fmt(cellLabel('@'+p.cat))}</small>`:''}`}</div><div class="pbar"><i data-pbar></i></div><span class="pst">${atom||p.heat?'加熱中…':'反応中…'}</span></div>`;
+  if(st==='fail')return `<div class="pin fail">✗ ${atom&&p.fail&&p.fail.label?fmt(p.fail.label)+' ':''}${esc(p.fail?p.fail.why:'失敗')}</div>`;
+  if(st==='fire')return `<div class="pin fire">🔥 燃えている！ あと${4-p.taps}回</div>`;
+  if(!items.length&&!(p&&p.cat))return `<div class="pin empty">${o.id===UI.sel?(atom?'← 周期表をタップ →':'← 試薬棚をタップ →'):'空の鍋'}</div>`;
+  const chips=atom?items.map(it=>itemChip(V,it)).join(''):items.map(it=>itemChip(V,it)).join('<i class="plus">+</i>');
+  const cat=p.cat?`<span class="chip cat" data-act="chip" data-s="@">${fmt(cellLabel('@'+p.cat))}</span>`:'';
+  const mid=p.mid?`<span class="midn">中間体</span>`:'';
+  return `<div class="pin mix">${chips}${cat}${mid}</div>`;
+}
+function cardBtns(V,o,p){
+  const st=potState(p),atom=V.g==='atom',has=p&&p.items.length>0;
+  if(st==='heat')return '';
+  if(st==='fail')return `<button data-act="dump" class="wide">鍋を空にしてやり直す</button>`;
+  if(st==='fire')return `<button data-act="ext" class="ext wide">消火！</button>`;
+  const h=p?p.heat:0;
+  const hb=atom?'':`<button class="heatb h${h}" data-act="heat" aria-label="温度：${HEAT[h]}">${HEATBTN[h]}</button>`;
+  const auto=V.auto?'<span class="autob">自動</span>':'';
+  return `${hb}<button class="go" data-act="react" ${has?'':'disabled'}>${atom?'加熱':'反応'}${auto}</button><button class="dump" data-act="dump" aria-label="鍋を空にする" ${has||(p&&p.cat)?'':'disabled'}>捨</button>`;
+}
+function cardWho(V,o,p){
+  // 協力：この客を選んでいる仲間（大きい点）と入れた人（小さい点）、対戦：この客を作っている相手
+  if(V.mode==='coop'){
+    const foc=V.order.filter(q=>q!==me()&&!V.players[q].left&&V.players[q].focus===o.id);
+    const by=p?Object.keys(p.by).filter(q=>V.players[q]):[];
+    return `<span class="who">${foc.map(q=>`<i class="foc" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}が担当"></i>`).join('')}${by.map(q=>`<i class="by" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}が入れた"></i>`).join('')}</span>`;
+  }
+  if(V.mode==='versus'){
+    return `<span class="who">${V.order.filter(q=>q!==me()&&!V.players[q].left).map(q=>{const op=o.pots[q],s2=potState(op);if(!op||(!op.items.length&&s2==='idle'))return '';return `<i class="foc${s2==='heat'?' hot':''}" style="--dc:${colorOf(V,q)}" title="${esc(V.players[q].name)}"></i>`;}).join('')}</span>`;
+  }
+  return '';
 }
 function cardClass(V,o){
-  let cls='ticket';if(o.vip)cls+=' vip';if(o.id===UI.sel)cls+=' sel';
+  let cls='ticket card';if(o.vip)cls+=' vip';if(o.id===UI.sel)cls+=' sel';
   const st=potState(myPot(V,o));if(st==='heat')cls+=' cooking';if(st==='fire')cls+=' burning';if(st==='fail')cls+=' failed';
   return cls;
 }
-// 反応物の表示名（濃・希どちらでもよい場合は「塩酸」のようにまとめる）
-function reagentName(e){
-  const n=nameOf(e.ids[0]);
-  return e.ids.length>1?n.replace(/^[濃希]/,''):n;
-}
-function hintHTML(V,key,level,mode){
-  const it=MENU[key],rs=route(key),last=rs[rs.length-1];
-  const chain=rs.length>1?rs.map(x=>fmt(fOf(x.main))).join(' → '):'';
-  const lhs=last.r.map(e=>(V.coef&&e.n>1?e.n:'')+esc(reagentName(e))).join('＋');
-  const cond=esc(condText(last));
-  if(mode==='name'){
-    if(level===1)return chain?`手順：${chain}`:`反応物：${lhs}`;
-    return `${chain?`最後：${lhs}<br>`:''}条件：${cond}`;
-  }
-  if(level===1)return `${esc(nameOf(it.t))} ${fmt(fOf(it.t))}${chain?`<br>手順：${chain}`:''}`;
-  return `${lhs}／${cond}`;
-}
 function renderOrders(V){
-  const slots=Math.max(4,V.max),three=slots>4;
-  const box=$('orders');box.classList.toggle('three',three);box.style.setProperty('--slots',slots);setOrderCols(box,slots);
+  const slots=Math.max(V.mode==='solo'?3:4,V.max);
+  const box=$('orders');box.style.setProperty('--slots',slots);setOrderCols(box,slots);
   const mc=colorOf(V,me());
   let h='';
   for(let k=0;k<slots;k++){
     const o=V.orders[k];
     if(!o){h+=`<div class="ticket empty"></div>`;continue;}
-    const isName=o.mode==='name',hn=E.hintsOf(V,o,me());
+    const isName=o.mode==='name',hn=E.hintsOf(V,o,me()),p=myPot(V,o);
     let clue,tags='',proc='',rev='';
     if(V.g==='atom'){
       const d=A.BYID[o.k];if(!d){h+=`<div class="ticket empty"></div>`;continue;}
@@ -818,54 +833,24 @@ function renderOrders(V){
     }
     h+=`<div class="${cardClass(V,o)}" data-o="${o.id}" style="--mc:${mc}">
       <div class="t-top"><span class="num">${k+1}</span><span class="face" data-face>${faceFor(o.left/o.total)}</span>
-        ${o.vip?'<span class="tag vip">VIP×2</span>':''}${tags}
+        ${o.vip?'<span class="tag vip">VIP×2</span>':''}${tags}${cardWho(V,o,p)}
         <button class="hint" data-act="hint" ${hn>=2?'disabled':''}>ヒント${hn?hn:''}</button></div>
-      ${clue}${proc}${rev?`<div class="reveal">${rev}</div>`:''}
-      ${cardPot(V,o)}
+      <div class="c-clue">${clue}${proc}</div>${rev?`<div class="reveal">${rev}</div>`:''}
+      ${potInner(V,o,p)}
+      <div class="c-btns">${cardBtns(V,o,p)}</div>
       <div class="tbar"><i data-bar></i></div></div>`;
   }
   box.innerHTML=h;
 }
-/* ---------- 選んでいる客の鍋 ---------- */
-function sigPot(V){
+// 棚の空きに「いまタップすると入る先」を表示
+function sigTarget(V){const o=V.orders.find(x=>x.id===UI.sel);return UI.sel+'|'+(o?V.orders.indexOf(o)+'|'+o.mode+E.hintsOf(V,o,me()):'-');}
+function renderTarget(V){
+  const el=$('ptTarget');if(!el)return;
   const o=V.orders.find(x=>x.id===UI.sel);
-  return UI.sel+'|'+(o?potSig(myPot(V,o))+'|'+E.hintsOf(V,o,me())+'|'+V.orders.indexOf(o):'-')+'|'+V.orders.length;
-}
-const HEATBTN=['🌡常温','🔥加熱','🔥高温高圧'];
-function itemChip(V,[id,n,poured]){
-  if(V.g==='atom')return `<span class="chip" data-act="chip" data-s="${esc(id)}">${esc(id)}${n>1?`<sub>${n}</sub>`:''}</span>`;
-  const s=SUB[id];if(!s)return '';
-  return `<span class="chip${poured?' poured':''}" data-act="chip" data-s="${esc(id)}">${!poured&&n>1?`<b class="co">${n}</b>`:''}${fmt(s.f)}${s.cc?`<small>${s.cc}</small>`:''}</span>`;
-}
-function renderPot(V){
-  const box=$('flasks');
-  const o=V.orders.find(x=>x.id===UI.sel);
-  if(!o){box.innerHTML=`<div class="pot empty"><p>伝票（客）をタップして選ぶ</p></div>`;return;}
-  const idx=V.orders.indexOf(o)+1,p=myPot(V,o),st=potState(p),items=p?p.items:[],atom=V.g==='atom';
+  if(!o){el.innerHTML='伝票（客）を選ぶと入れ先が出る';el.style.removeProperty('--mc');return;}
   const T=(E.RULES[V.g]||E.RULES.rx).tgt(o.k);
-  const label=o.mode==='name'||E.hintsOf(V,o,me())>=1?esc(T.n):'性質の注文';
-  let body='',status='',btns='';
-  if(st==='idle'){
-    body=items.length||(p&&p.cat)?(atom?items.map(it=>itemChip(V,it)).join(''):items.map(it=>itemChip(V,it)).join('<i class="plus">+</i>')+(p&&p.cat?`<span class="chip cat" data-act="chip" data-s="@">${fmt(cellLabel('@'+p.cat))}</span>`:'')):`<p class="hintline">${atom?'周期表をタップして元素を入れる':'試薬棚をタップして入れる（もう一度で係数+1）'}</p>`;
-    status=p&&p.mid?`中間体 ${fmt(fOf(RXBY[p.mid].main))} 入り：続けて次の反応へ`:(items.length?'調合中':'空の鍋');
-    const has=items.length>0,hl=atom?'':`<button class="heatb h${p?p.heat:0}" data-act="heat" aria-label="温度：${HEAT[p?p.heat:0]}">${HEATBTN[p?p.heat:0]}</button>`;
-    btns=`${hl}<button class="go" data-act="react" ${has?'':'disabled'}>${atom?'加熱':'反応'}</button><button class="dump" data-act="dump" aria-label="鍋を空にする" ${has||(p&&p.cat)?'':'disabled'}>捨</button>`;
-  }else if(st==='heat'){
-    body=`<div class="eqp">${items.map(([id,n,x])=>`${!x&&n>1?n:''}${fmt(atom?id:fOf(id))}`).join(atom?' ':' + ')}${atom?'':` →${p.cat?`<small>${fmt(cellLabel('@'+p.cat))}</small>`:''}`}</div>`;
-    status=atom?'加熱中…':(p.heat?'加熱中…':'反応中…')+'　できたら自動で提供';btns=`<span class="note">ぐつぐつ…</span>`;
-  }else if(st==='fail'){
-    body=`<div class="product small">${atom&&p.fail&&p.fail.label?fmt(p.fail.label)+'<br>':''}${esc(p.fail?p.fail.why:'失敗')}</div>`;status='失敗';
-    btns=`<button class="go" data-act="dump">鍋を空にしてやり直す</button>`;
-  }else if(st==='fire'){
-    body=`<div class="fire-ico">🔥</div>`;status=`燃えている！ あと${4-p.taps}回で消火`;
-    btns=`<button class="ext" data-act="ext">消火！</button>`;
-  }
-  box.innerHTML=`<div class="pot s-${st}" style="--mc:${colorOf(V,me())}">
-    <div class="p-head"><span class="num">${idx}</span><span class="p-name">${label}</span>${T.proc?`<span class="proc">${esc(T.proc)}</span>`:''}</div>
-    <div class="p-body">${body}</div>
-    <div class="p-status">${status}</div>
-    <div class="f-bar"><i data-fbar></i></div>
-    <div class="f-btns">${btns}</div></div>`;
+  const nm=o.mode==='name'||E.hintsOf(V,o,me())>=1?esc(T.n):'性質の注文';
+  el.innerHTML=`入れ先 → <b class="num">${V.orders.indexOf(o)+1}</b> ${nm}`;el.style.setProperty('--mc',colorOf(V,me()));
 }
 /* ---------- 試薬棚 ---------- */
 // ラベル幅（em）の見積もり：セルに収まる文字サイズと改行位置を決める
@@ -891,43 +876,60 @@ function symHTML(lab){
   return {cls:'',px,html:(cc?`<small class="cc">${cc}</small>`:'')+lines.map(fmt).join('<br>')};
 }
 function buildTable(g){
-  const T=$('ptable');T.classList.toggle('rx',g!=='atom');
-  T.classList.toggle('pt',g==='atom');
+  const T=$('ptable'),L=$('ptL'),R=$('ptR');
+  T.classList.toggle('rx',g!=='atom');T.classList.toggle('pt',g==='atom');T.classList.remove('dark');
   if(g==='atom'){
-    // 本物の周期表：1〜18族 × 第1〜7周期（ランタノイド・アクチノイドは1マスにまとめる）
-    let h='<div class="pt-corner" style="grid-column:1;grid-row:1">族</div>';
-    for(let gr=1;gr<=18;gr++)h+=`<div class="glab" style="grid-column:${gr+1};grid-row:1">${gr}</div>`;
-    for(let p=1;p<=7;p++)h+=`<div class="plab" style="grid-column:1;grid-row:${p+1}">${p}</div>`;
-    A.PT.forEach(e=>{h+=cellHTMLA(e);});
+    // 周期表を 1〜9族（左端）と 10〜18族（右端）に分けて置く
+    const half=(g0,g1,side)=>{
+      const off=side==='L'?1:0,lc=side==='L'?1:g1-g0+2;
+      let h=`<div class="pt-corner" style="grid-column:${lc};grid-row:1">族</div>`;
+      for(let gr=g0;gr<=g1;gr++)h+=`<div class="glab" style="grid-column:${gr-g0+1+off};grid-row:1">${gr}</div>`;
+      for(let p=1;p<=7;p++)h+=`<div class="plab" style="grid-column:${lc};grid-row:${p+1}">${p}</div>`;
+      A.PT.filter(e=>e.g>=g0&&e.g<=g1).forEach(e=>{h+=cellHTMLA(e,e.g-g0+1+off);});
+      return h;
+    };
+    let hl=half(1,9,'L');
     for(const k of ['*La','*Ac']){
       const P=A.POS[k],nm=k==='*La'?'ランタノイド':'アクチノイド';
-      h+=`<div class="cell c-f ph" style="grid-column:${P.g+1};grid-row:${P.p+1}" title="${nm}（${P.z0}〜${P.z1}）"><span class="z">${P.z0}-</span><span class="sym">${k==='*La'?'La-Lu':'Ac-Lr'}</span></div>`;
+      hl+=`<div class="cell c-f ph" style="grid-column:${P.g+1};grid-row:${P.p+1}" title="${nm}（${P.z0}〜${P.z1}）"><span class="z">${P.z0}-${P.z1}</span><span class="sym">${k==='*La'?'*':'**'}</span></div>`;
     }
-    h+=`<div class="pt-info" id="ptInfo" style="grid-column:3 / 19;grid-row:2">元素をタップすると、名前・周期・族・分類がここに出る</div>`;
-    h+=`<div class="pt-legend" style="grid-column:4 / 14;grid-row:3 / 5">${Object.entries(A.CATJP).map(([k,v])=>`<span><i class="c-${k}"></i>${v}</span>`).join('')}</div>`;
-    T.innerHTML=h;T.classList.remove('dark');requestAnimationFrame(fitTable);return;
+    hl+=`<div class="pt-info" id="ptInfo" style="grid-column:3 / 11;grid-row:2">元素をタップすると名前・周期・族が出る</div>`;
+    hl+=`<div class="pt-legend" style="grid-column:4 / 11;grid-row:3 / 5">${Object.entries(A.CATJP).map(([k,v])=>`<span><i class="c-${k}"></i>${v}</span>`).join('')}</div>`;
+    let hr=half(10,18,'R');
+    hr+=`<div class="pt-target" id="ptTarget" style="grid-column:1 / 9;grid-row:2"></div>`;
+    hr+=`<div class="pt-note" style="grid-column:1 / 4;grid-row:3 / 5">10〜12族は<br>遷移元素</div>`;
+    L.innerHTML=hl;R.innerHTML=hr;
+  }else{
+    // 試薬棚も左右に4列ずつ
+    const half=(c0,c1)=>SHELF.map(row=>row.slice(c0,c1).map(cellHTML).join('')).join('');
+    L.innerHTML=`<div class="shelf-cap" id="ptInfo">試薬棚：タップで選んだ客の鍋へ</div>`+half(0,4)+`<div class="shelf-cap cat">触媒・脱水剤</div>`+CATS.slice(0,4).map(c=>cellHTML('@'+c)).join('');
+    R.innerHTML=`<div class="shelf-cap pt-target" id="ptTarget"></div>`+half(4,8)+`<div class="shelf-cap cat">（矢印の上に書く）</div>`+CATS.slice(4).map(c=>cellHTML('@'+c)).join('');
   }
-  let h=`<div class="shelf-cap">試薬棚：タップで選んだ客の鍋へ／もう一度で係数+1</div>`;
-  SHELF.forEach(row=>row.forEach(id=>{h+=cellHTML(id);}));
-  h+=`<div class="shelf-cap cat">触媒・脱水剤（矢印の上に書くもの）：タップでセット／もう一度で外す</div>`;
-  CATS.forEach(c=>{h+=cellHTML('@'+c);});
-  $('ptable').innerHTML=h;$('ptable').classList.remove('dark');
+  UI.sig.f=null;
+  requestAnimationFrame(fitTable);
 }
-function cellHTMLA(e){return `<button class="cell c-${e.c}" data-el="${e.s}" style="grid-column:${e.g+1};grid-row:${e.p+1}" aria-label="${e.s} ${A.ELNAME[e.s]||''}"><span class="z">${e.z}</span><span class="sym">${e.s}</span><span class="bd"></span></button>`;}
+function cellHTMLA(e,col){return `<button class="cell c-${e.c}" data-el="${e.s}" style="grid-column:${col??e.g+1};grid-row:${e.p+1}" aria-label="${e.s} ${A.ELNAME[e.s]||''}"><span class="z">${e.z}</span><span class="sym">${e.s}</span><span class="nm">${A.ELNAME[e.s]||''}</span><span class="bd"></span></button>`;}
 // 横画面で伝票が細くなりすぎるときは2段に折り返す
 function setOrderCols(box,slots){
   const W=box.clientWidth||600;
-  box.style.setProperty('--cols',W/slots>=112?slots:Math.ceil(slots/2));
+  const cols=Math.max(1,Math.min(slots,Math.floor(W/104)||1,SAVE.ui.layout==='bottom'?3:2));
+  const rows=Math.ceil(slots/cols);
+  box.style.setProperty('--cols',cols);box.style.setProperty('--rows',rows);
+  // カードが縦に伸びすぎないよう、1段の高さは最大230px
+  const H=box.clientHeight;
+  if(H>0)box.style.setProperty('--rowh',Math.floor(Math.min(230,(H-(rows-1)*6)/rows))+'px');
 }
 window.addEventListener('resize',()=>{const b=$('orders');if(b)setOrderCols(b,+getComputedStyle(b).getPropertyValue('--slots')||4);});
 // 周期表のマスが縦長になりすぎないよう、行の高さをマスの幅の1.5倍までにする
 function fitTable(){
-  const T=$('ptable');if(!T)return;
-  if(!T.classList.contains('pt')){T.style.gridTemplateRows='';T.style.alignContent='';return;}
-  T.style.gridTemplateRows='';
-  const w=T.clientWidth-8,h=T.clientHeight-8;if(w<=0||h<=0)return;
-  const rh=Math.max(18,Math.min((h-12-14)/7,(w-14-36)/18*1.5));
-  T.style.gridTemplateRows=`12px repeat(7,${Math.floor(rh)}px)`;T.style.alignContent='center';
+  for(const H of [$('ptL'),$('ptR')]){
+    if(!H)continue;
+    H.style.gridTemplateRows='';H.style.alignContent='';
+    if(!$('ptable').classList.contains('pt'))continue;
+    const w=H.clientWidth-8,h=H.clientHeight-8;if(w<=0||h<=0)continue;
+    const rh=Math.max(18,Math.min((h-12-14)/7,(w-12-16)/9*1.7));
+    H.style.gridTemplateRows=`12px repeat(7,${Math.floor(rh)}px)`;H.style.alignContent='center';
+  }
 }
 window.addEventListener('resize',()=>requestAnimationFrame(fitTable));
 window.addEventListener('orientationchange',()=>setTimeout(fitTable,300));
@@ -936,17 +938,17 @@ let infoT=0;
 function showInfo(g,k){
   if(g==='atom'){
     const el=$('ptInfo'),e=A.PT.find(x=>x.s===k);if(!el||!e)return;
-    el.innerHTML=`<b>${e.z} ${esc(e.s)}</b> ${esc(A.ELNAME[e.s]||'')}　第${e.p}周期・${e.g}族　<i class="c-${e.c}"></i>${esc(A.CATJP[e.c])}${e.g>=3&&e.g<=12?'':'（典型元素）'}`;
+    el.innerHTML=`<span><b>${e.z} ${esc(e.s)}</b> ${esc(A.ELNAME[e.s]||'')}</span><span>第${e.p}周期・${e.g}族・<i class="c-${e.c}"></i>${esc(A.CATJP[e.c])}</span>`;
     return;
   }
-  const cap=document.querySelector('#ptable .shelf-cap');if(!cap)return;
+  const cap=$('ptInfo');if(!cap)return;
   cap.textContent=`${cellLabel(k).replace(/\d/g,d=>'₀₁₂₃₄₅₆₇₈₉'[d])}：${cellName(k)}`;cap.classList.add('info');
-  clearTimeout(infoT);infoT=setTimeout(()=>{cap.textContent='試薬棚：タップで選んだ客の鍋へ／もう一度で係数+1';cap.classList.remove('info');},1800);
+  clearTimeout(infoT);infoT=setTimeout(()=>{cap.textContent='試薬棚：タップで選んだ客の鍋へ';cap.classList.remove('info');},1800);
 }
 function cellHTML(key){
   const y=symHTML(cellLabel(key));
   const kind=key[0]==='@'?'cat':(SUB[key].k||'salt');
-  return `<button class="cell r-${kind}" data-el="${esc(key)}" aria-label="${esc(cellName(key))}" title="${esc(cellName(key))}"><span class="sym${y.cls}" style="font-size:${y.px}px">${y.html}</span><span class="bd"></span></button>`;
+  return `<button class="cell r-${kind}" data-el="${esc(key)}" aria-label="${esc(cellName(key))}" title="${esc(cellName(key))}"><span class="sym${y.cls}" style="font-size:${y.px}px">${y.html}</span><span class="nm">${esc(cellName(key).replace(/（.*）/,''))}</span><span class="bd"></span></button>`;
 }
 function sigCells(V){
   const own=E.owners(V);
@@ -1021,12 +1023,7 @@ function frameUpdate(V){
     const el=tks[k];if(!el)return;const pb=el.querySelector('[data-pbar]');const p=myPot(V,o);
     if(pb&&p&&p.state==='heat')pb.style.width=(p.t/p.dur*100)+'%';
   });
-  const so=V.orders.find(x=>x.id===UI.sel),sp=so&&myPot(V,so),b=$('flasks').querySelector('[data-fbar]');
-  if(b){
-    if(sp&&sp.state==='heat'){b.style.width=(sp.t/sp.dur*100)+'%';b.style.background='#f2a900';}
-    else if(sp&&sp.state==='fail'){b.style.width=(Math.min(1,sp.t/10)*100)+'%';b.style.background='var(--hot)';}
-    else b.style.width='0';
-  }
+
 }
 function toast(html,kind,slot){
   const feed=$('feed');const el=document.createElement('div');
@@ -1047,7 +1044,7 @@ $('ptable').addEventListener('pointerdown',e=>{
   const s=c.dataset.el;
   if(!tryAdd(s,c))return;
   stopHold();
-  holdT=setTimeout(()=>{holdIv=setInterval(()=>{if(!tryAdd(s,c))stopHold();},110);},380);
+  if(SAVE.ui.repeat)holdT=setTimeout(()=>{holdIv=setInterval(()=>{if(!tryAdd(s,c))stopHold();},110);},380);
 });
 ['pointerup','pointercancel','pointerleave'].forEach(ev=>$('ptable').addEventListener(ev,stopHold));
 $('ptable').addEventListener('contextmenu',e=>e.preventDefault());
@@ -1075,33 +1072,27 @@ function tryAdd(s,cell){
   if(cell){cell.classList.add('hit');setTimeout(()=>cell.classList.remove('hit'),80);}
   return s[0]!=='@';
 }
-$('flasks').addEventListener('pointerdown',e=>{
-  const V=view();if(!playable(V))return;
-  const b=e.target.closest('[data-act]');if(!b)return;
-  e.preventDefault();
-  const o=V.orders.find(x=>x.id===UI.sel);if(!o)return;
-  const p=myPot(V,o),a=b.dataset.act;
-  if(a==='react'){
-    if(p&&p.state==='idle'&&p.items.length){
-      act({t:'react',o:o.id});sfx('react');
-      // 反応中は次の客へ（空いている鍋があれば）
-      const nx=V.orders.find(x=>x.id!==o.id&&potState(myPot(V,x))==='idle'&&!(myPot(V,x)&&myPot(V,x).items.length));
-      if(nx)pickNext(V,o.id);
-    }
-  }
-  else if(a==='heat'){if(V.g==='rx'&&(!p||p.state==='idle')){act({t:'heat',o:o.id,h:((p?p.heat:0)+1)%3});sfx('tap');}}
-  else if(a==='dump'){act({t:'dump',o:o.id});sfx('whoosh');}
-  else if(a==='ext'){act({t:'ext',o:o.id});sfx('whoosh');}
-  else if(a==='chip'&&p&&p.state==='idle'){act({t:'chip',o:o.id,s:b.dataset.s});sfx('pop');}
-});
 $('orders').addEventListener('pointerdown',e=>{
   const V=view();if(!playable(V))return;
   const t=e.target.closest('.ticket[data-o]');if(!t)return;
   e.preventDefault();
   const id=+t.dataset.o,o=V.orders.find(x=>x.id===id);if(!o)return;
-  if(e.target.closest('[data-act="hint"]')){if(E.hintsOf(V,o,me())<2){act({t:'hint',o:id});sfx('tap');}setSel(id);return;}
-  // 燃えている鍋の客をもう一度タップで消火
-  const p=myPot(V,o);
+  const p=myPot(V,o),b=e.target.closest('[data-act]');
+  if(b){
+    const a=b.dataset.act;
+    if(a==='hint'){if(E.hintsOf(V,o,me())<2){act({t:'hint',o:id});sfx('tap');}}
+    else if(a==='react'){
+      if(p&&p.state==='idle'&&p.items.length){
+        act({t:'react',o:id});sfx('react');
+        if(SAVE.ui.adv&&UI.sel===id){const nx=V.orders.find(x=>x.id!==id&&potState(myPot(V,x))==='idle'&&!(myPot(V,x)&&myPot(V,x).items.length));if(nx){pickNext(V,id);return;}}
+      }
+    }
+    else if(a==='heat'){if(V.g==='rx'&&(!p||p.state==='idle')){act({t:'heat',o:id,h:((p?p.heat:0)+1)%3});sfx('tap');}}
+    else if(a==='dump'){act({t:'dump',o:id});sfx('whoosh');}
+    else if(a==='ext'){act({t:'ext',o:id});sfx('whoosh');}
+    else if(a==='chip'&&p&&p.state==='idle'){act({t:'chip',o:id,s:b.dataset.s});sfx('pop');}
+    setSel(id);return;
+  }
   if(UI.sel===id&&p&&p.state==='fire'){act({t:'ext',o:id});sfx('whoosh');return;}
   setSel(id);sfx('tap');
 });
@@ -1138,6 +1129,42 @@ $('stamps').innerHTML=STAMPS.map((s,i)=>`<button data-k="${i}">${s}</button>`).j
 $('btnStamp').addEventListener('click',()=>{$('stamps').classList.toggle('on');sfx('tap');});
 $('stamps').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b)return;act({t:'stamp',k:+b.dataset.k});closeStamps();});
 
+/* ================= 設定（自分で選べるUI） ================= */
+const SETTINGS=[
+  {k:'auto',t:'自動精製',d:'必要なものがそろったら自動で反応させる（ソロ用。マルチプレイはロビーでホストが決める）',o:[[false,'OFF'],[true,'ON']]},
+  {k:'layout',t:'棚の配置',d:'左右に分割：周期表を1〜9族と10〜18族に分けて両端に置き、中央に客の列。下にまとめる：タブレットや縦画面向け',o:[['split','左右に分割'],['bottom','下にまとめる']]},
+  {k:'adv',t:'反応後は次の客へ',d:'反応を押したら、空いている客を自動で選ぶ',o:[[true,'ON'],[false,'OFF']]},
+  {k:'names',t:'元素名・試薬名',d:'棚のマスに名前も出す（覚え始め向け）',o:[[false,'出さない'],[true,'出す']]},
+  {k:'colors',t:'分類の色分け',d:'OFFにすると全部同じ色。位置だけで覚える上級者向け',o:[[true,'ON'],[false,'OFF']]},
+  {k:'fs',t:'鍋・伝票の文字',d:'',o:[['s','小'],['m','中'],['l','大']]},
+  {k:'repeat',t:'長押しで連続投入',d:'',o:[[true,'ON'],[false,'OFF']]},
+  {k:'bgm',t:'BGM',d:'効果音はタイトルの「音」で切り替え',o:[[true,'ON'],[false,'OFF']]},
+  {k:'vib',t:'振動',d:'おじゃまが当たったときに振動（対応端末のみ）',o:[[true,'ON'],[false,'OFF']]},
+];
+function applyUI(){
+  const b=document.body.classList,u=SAVE.ui;
+  b.toggle('names',!!u.names);b.toggle('mono',!u.colors);b.toggle('lay-bottom',u.layout==='bottom');
+  ['s','m','l'].forEach(x=>b.toggle('fs-'+x,u.fs===x));
+  UI.sig={};
+  const o=$('orders');if(o)setOrderCols(o,+getComputedStyle(o).getPropertyValue('--slots')||4);
+  requestAnimationFrame(fitTable);
+}
+function openSettings(back){
+  UI.setBack=back||null;
+  const rows=SETTINGS.map(x=>`<div class="set-row"><div class="set-t"><b>${x.t}</b>${x.d?`<small>${x.d}</small>`:''}</div>
+    <div class="seg set-seg">${x.o.map(([v,l])=>`<button data-set="${x.k}" data-v='${JSON.stringify(v)}' class="${SAVE.ui[x.k]===v?'on':''}">${l}</button>`).join('')}</div></div>`).join('');
+  overlay(`<h2>⚙ 設定</h2><div class="settings">${rows}</div><div class="row-btns"><button class="btn go" data-ov="setclose">閉じる</button></div>`,'settings');
+}
+$('btnSettings').addEventListener('click',()=>{audio();openSettings(null);});
+$('ov').addEventListener('click',e=>{
+  const b=e.target.closest('[data-set]');if(!b)return;
+  const k=b.dataset.set;let v;try{v=JSON.parse(b.dataset.v);}catch(x){return;}
+  SAVE.ui[k]=v;persist();sfx('tap');
+  if(k==='auto'&&SES&&SES.role==='solo'&&SES.S)SES.S.auto=v;
+  applyUI();openSettings(UI.setBack);
+});
+applyUI();
+
 /* ================= オーバーレイ操作 ================= */
 function doJoin(){
   const c=normCode(($('inCode')||{}).value);const n=$('inName2');
@@ -1165,6 +1192,8 @@ $('ov').addEventListener('click',e=>{
     case 'joingo':doJoin();break;
     case 'rejoin':joinRoom(b.dataset.code||'');break;
     case 'rehost':createRoom();break;
+    case 'settings':openSettings('pause');break;
+    case 'setclose':{const V=view();if(UI.setBack==='pause'&&V&&V.paused){showPause(V);}else closeOverlay();break;}
   }
 });
 
