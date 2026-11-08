@@ -431,85 +431,82 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--ticket);outline
 .logo .land{display:block;margin-top:4px;font-size:12px;color:var(--cool)}
 
 /* 縦画面のときの「横にして」案内 */
-#rotate{display:none;position:absolute;inset:0;z-index:70;background:#081419ee;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;text-align:center;padding:24px}
+#rotate{display:none;position:absolute;inset:0;z-index:45;background:#081419ee;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;text-align:center;padding:24px}
 #rotate .rot-ico{font-size:56px;animation:bob .8s infinite alternate}
 #rotate b{font-family:var(--font-display);font-weight:400;font-size:22px;color:var(--ticket)}
 #rotate p{margin:0;font-size:13px;line-height:1.6;color:#cfe3e8;max-width:320px}
-@media (orientation:portrait){body:not(.allow-portrait) #game.on #rotate{display:flex}}
+body.need-rot #game.on #rotate{display:flex}
+#rotate .row-btns{justify-content:center}
 .hud .fsb{font-size:15px}
 
 /* =================== 横画面レイアウト =================== */
 @media (orientation:landscape) and (min-width:560px){
   #app{max-width:none}
   .screen:not(#game){left:50%;right:auto;width:min(100%,700px);transform:translateX(-50%)}
-  #game.screen.on{display:grid}
-  #game{--side:clamp(200px,27vw,330px);grid-template-columns:var(--side) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);
+}
+:where(body.ui-land) #game.screen.on{display:grid}
+:where(body.ui-land) #game{--side:clamp(200px,27vw,330px);grid-template-columns:var(--side) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);
     grid-template-areas:"hud orders" "mp orders" "flasks table";gap:6px 8px;
     padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left))}
-  #game .hud{grid-area:hud;flex-wrap:wrap;gap:5px;align-content:flex-start}
-  #game .hud .stage-tag{order:9;flex:1 0 100%;max-width:none}
-  #game .hud .time{min-width:58px;font-size:18px}
-  #game .hud .score{flex:1;font-size:14px}
-  #game .hud .icon{width:32px;height:30px}
-  #game .incoming{order:10;flex:1 0 100%}
-  #game .mpbar{grid-area:mp;flex-wrap:nowrap;align-items:flex-start;min-height:0;gap:4px}
-  #game .mpbar .who{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;flex:1}
-  #game .mpbar .pc{min-width:0;padding:1px 6px 1px 3px;font-size:10px}
-  #game .mpbar .pc .nm{max-width:none;flex:1;min-width:0}
-  #game .mpbar .rot{display:none}
-  #game .mpbar .stampbtn{height:24px;padding:0 6px}
-  #game .orders,#game .orders.three{grid-area:orders;grid-template-columns:repeat(var(--cols,4),minmax(0,1fr));grid-template-rows:auto;align-self:start}
-  #game .ticket{min-height:66px}
-  #game .orders.three .clue{font-size:11px}
-  #game .flasks{grid-area:flasks;grid-template-columns:minmax(0,1fr)!important;grid-auto-rows:minmax(0,1fr);min-height:0;align-content:stretch}
-  #game .flasks.four{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-  #game .flask{min-height:0;overflow:hidden;padding:4px 6px}
-  #game .flask .f-body{min-height:0;overflow:hidden}
-  #game .flask .product{font-size:17px}
-  #game .flasks.three .f-btns button,#game .flasks.four .f-btns button{font-size:12px}
-  #game .ptable{grid-area:table;min-height:0}
-  #game .feed{top:4px;left:calc(50% + var(--side)/2)}
-  #game .stamps{top:auto;bottom:10px;left:10px;right:auto}
-  .overlay .panel{max-width:680px}
-}
+:where(body.ui-land) #game .hud{grid-area:hud;flex-wrap:wrap;gap:5px;align-content:flex-start}
+:where(body.ui-land) #game .hud .stage-tag{order:9;flex:1 0 100%;max-width:none}
+:where(body.ui-land) #game .hud .time{min-width:58px;font-size:18px}
+:where(body.ui-land) #game .hud .score{flex:1;font-size:14px}
+:where(body.ui-land) #game .hud .icon{width:32px;height:30px}
+:where(body.ui-land) #game .incoming{order:10;flex:1 0 100%}
+:where(body.ui-land) #game .mpbar{grid-area:mp;flex-wrap:nowrap;align-items:flex-start;min-height:0;gap:4px}
+:where(body.ui-land) #game .mpbar .who{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;flex:1}
+:where(body.ui-land) #game .mpbar .pc{min-width:0;padding:1px 6px 1px 3px;font-size:10px}
+:where(body.ui-land) #game .mpbar .pc .nm{max-width:none;flex:1;min-width:0}
+:where(body.ui-land) #game .mpbar .rot{display:none}
+:where(body.ui-land) #game .mpbar .stampbtn{height:24px;padding:0 6px}
+:where(body.ui-land) #game .orders,:where(body.ui-land) #game .orders.three{grid-area:orders;grid-template-columns:repeat(var(--cols,4),minmax(0,1fr));grid-template-rows:auto;align-self:start}
+:where(body.ui-land) #game .ticket{min-height:66px}
+:where(body.ui-land) #game .orders.three .clue{font-size:11px}
+:where(body.ui-land) #game .flasks{grid-area:flasks;grid-template-columns:minmax(0,1fr)!important;grid-auto-rows:minmax(0,1fr);min-height:0;align-content:stretch}
+:where(body.ui-land) #game .flasks.four{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+:where(body.ui-land) #game .flask{min-height:0;overflow:hidden;padding:4px 6px}
+:where(body.ui-land) #game .flask .f-body{min-height:0;overflow:hidden}
+:where(body.ui-land) #game .flask .product{font-size:17px}
+:where(body.ui-land) #game .flasks.three .f-btns button,:where(body.ui-land) #game .flasks.four .f-btns button{font-size:12px}
+:where(body.ui-land) #game .ptable{grid-area:table;min-height:0}
+:where(body.ui-land) #game .feed{top:4px;left:calc(50% + var(--side)/2)}
+:where(body.ui-land) #game .stamps{top:auto;bottom:10px;left:10px;right:auto}
+:where(body.ui-land) .overlay .panel{max-width:680px}
 /* 低い横画面（スマホ） */
-@media (orientation:landscape) and (max-height:430px){
-  #game .ticket{min-height:58px;padding:3px 6px 9px}
-  #game .clue.name{font-size:15px}
-  #game .t-top .face{font-size:15px}
-  #game .flask .f-head{font-size:10px}
-  #game .f-btns button{padding:3px 2px}
-  #game .flask .eq{font-size:8.5px}
-  .ptable.rx{grid-template-rows:11px repeat(6,minmax(0,1fr)) 12px minmax(0,1fr);gap:2px;padding:4px}
-  .shelf-cap{font-size:8.5px;line-height:11px}
+@media (max-height:430px){
+  :where(body.ui-land) #game .ticket{min-height:58px;padding:3px 6px 9px}
+  :where(body.ui-land) #game .clue.name{font-size:15px}
+  :where(body.ui-land) #game .t-top .face{font-size:15px}
+  :where(body.ui-land) #game .flask .f-head{font-size:10px}
+  :where(body.ui-land) #game .f-btns button{padding:3px 2px}
+  :where(body.ui-land) #game .flask .eq{font-size:8.5px}
+  :where(body.ui-land) .ptable.rx{grid-template-rows:11px repeat(6,minmax(0,1fr)) 12px minmax(0,1fr);gap:2px;padding:4px}
+  :where(body.ui-land) .shelf-cap{font-size:8.5px;line-height:11px}
 }
 
 /* 伝票の見出しを1行に収める */
 .t-top{flex-wrap:nowrap;overflow:hidden;min-width:0}
 .t-top .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
 .t-top .hint{white-space:nowrap;flex:0 0 auto}
-@media (orientation:landscape) and (max-width:900px){
-  #game .t-top .tag:not(.vip):not(.step){display:none}
-  #game .t-top .hint{font-size:10px;padding:0 4px}
+@media (max-width:900px){
+  :where(body.ui-land) #game .t-top .tag:not(.vip):not(.step){display:none}
+  :where(body.ui-land) #game .t-top .hint{font-size:10px;padding:0 4px}
 }
 
 .hud .hudrot{display:none!important}
-@media (orientation:landscape) and (min-width:560px){
-  #game .hud .hudrot{order:8;font-size:10px;padding:2px 7px}
-  #game .hud .hudrot[style=""]{display:inline-block!important}
-}
-@media (orientation:landscape) and (min-width:560px){
-  #game .flask{gap:3px}
-  #game .flask .f-body{min-height:22px;flex:1 1 22px}
-  #game .flask .f-btns{flex:0 0 auto}
-  #game .flask .f-btns button{padding:3px 2px}
-  #game .flask .chip{font-size:12px;padding:0 4px}
-}
+:where(body.ui-land) #game .hud .hudrot{order:8;font-size:10px;padding:2px 7px}
+:where(body.ui-land) #game .hud .hudrot[style=""]{display:inline-block!important}
+:where(body.ui-land) #game .flask{gap:3px}
+:where(body.ui-land) #game .flask .f-body{min-height:22px;flex:1 1 22px}
+:where(body.ui-land) #game .flask .f-btns{flex:0 0 auto}
+:where(body.ui-land) #game .flask .f-btns button{padding:3px 2px}
+:where(body.ui-land) #game .flask .chip{font-size:12px;padding:0 4px}
 .flask .f-head,.flask .f-bar{flex:0 0 auto}
-@media (orientation:landscape) and (max-height:430px){
-  #game .flasks.three{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-  #game .flasks.three .flask:last-child{grid-column:1 / -1}
-  #game .flask .f-bar{height:4px}
+@media (max-height:430px){
+  :where(body.ui-land) #game .flasks.three{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  :where(body.ui-land) #game .flasks.three .flask:last-child{grid-column:1 / -1}
+  :where(body.ui-land) #game .flask .f-bar{height:4px}
 }
 
 /* =================== 客ごとの鍋 =================== */
@@ -555,10 +552,8 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--ticket);outline
 .pot .f-btns .heatb.h1{background:#ffb74d}
 .pot .f-btns .heatb.h2{background:var(--hot);color:#fff}
 .pot .eqp{font-size:13px;font-weight:800;width:100%}
-@media (orientation:landscape) and (min-width:560px){
-  #game .pot{min-height:0;height:100%}
-  #game .flasks{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)}
-}
+:where(body.ui-land) #game .pot{min-height:0;height:100%}
+:where(body.ui-land) #game .flasks{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(0,1fr)}
 .t-top .tag.step,.t-top .tag.vip{flex:0 0 auto}
 
 /* =================== 両端に周期表・中央に客の列（v2レイアウト） =================== */
@@ -588,13 +583,11 @@ body.fs-l{--fsk:1.2}
 .pt-note{font-size:9px;color:#7fa3ad;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3;font-weight:800}
 #game .orders{grid-area:orders;display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr))!important;grid-template-rows:repeat(var(--rows,2),var(--rowh,minmax(0,1fr)))!important;gap:6px;min-height:0;align-self:stretch;align-content:start}
 #game .feed{left:50%}
-@media (orientation:landscape) and (min-width:560px){
-  #game{--half:clamp(210px,29vw,430px);grid-template-columns:var(--half) minmax(0,1fr) var(--half);grid-template-rows:auto auto minmax(0,1fr);
+:where(body.ui-land) #game{--half:clamp(210px,29vw,430px);grid-template-columns:var(--half) minmax(0,1fr) var(--half);grid-template-rows:auto auto minmax(0,1fr);
     grid-template-areas:"tl hud tr" "tl mp tr" "tl orders tr"}
-  body.lay-bottom #game{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) minmax(0,1.25fr);
+body.lay-bottom:where(.ui-land) #game{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) minmax(0,1.25fr);
     grid-template-areas:"hud hud" "mp mp" "orders orders" "tl tr"}
-  #game .stamps{bottom:10px;left:50%;transform:translateX(-50%);top:auto;right:auto}
-}
+:where(body.ui-land) #game .stamps{bottom:10px;left:50%;transform:translateX(-50%);top:auto;right:auto}
 
 /* 客のカード：鍋の中身をいつも見せる */
 .ticket.card{display:flex;flex-direction:column;gap:3px;padding:4px 6px 10px;min-height:0;overflow:hidden}
@@ -704,3 +697,78 @@ body.mono .pt-legend{visibility:hidden}
 
 .pin .grp b{max-width:none;padding:0 3px;font-size:10px}
 .ticket.card .c-btns button{padding:3px 2px}
+
+/* =================== 縦持ちレイアウト =================== */
+/* 上から HUD・客の列・操作ボタン・棚。行の高さは layoutGame() が画面に合わせて決める */
+.actbar,.pt-act{display:none}
+body.in-game #app{max-width:none}
+body.ui-port #game{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px;
+  padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
+body.ui-port.scr-land #game{left:0;right:0;margin:0 auto;width:min(100%,62vh)}
+body.ui-port #game .hud{gap:6px}
+body.ui-port #game .hud .icon{width:34px;height:32px}
+body.ui-port #game .hud .time{font-size:19px;min-width:62px;padding:3px 8px}
+body.ui-port #game .hud .pill{padding:3px 9px}
+body.ui-port #game .stage-tag{flex:1 1 auto;max-width:none;min-width:0}
+body.ui-port #game .hud .score{flex:0 0 auto;min-width:64px}
+body.ui-port #game .incoming.on~.score{min-width:0}
+body.ui-port #game .mpbar{min-height:24px}
+
+/* 伝票：ボタンは下の操作ボタンにまとめ、伝票は「誰の・何を・鍋の中身」に絞る */
+body.ui-port .ticket.card{padding:3px 5px 8px;gap:2px}
+body.ui-port .ticket.card .c-btns{display:none}
+body.ui-port .ticket.card .t-top .hint{font-size:10px;padding:1px 5px}
+body.ui-port .orders.narrow .t-top .tag:not(.vip){display:none}
+body.ui-port .orders.narrow .card .clue.name{font-size:calc(14px*var(--fsk));-webkit-line-clamp:2;white-space:normal;line-height:1.15}
+body.ui-port .orders.narrow .card .clue{font-size:calc(11px*var(--fsk))}
+body.ui-port .ticket.card .pin{min-height:26px}
+body.ui-port .ticket.empty{border-width:2px}
+
+/* 操作ボタン（選んでいる客に対して） */
+body.ui-port:not(.pt-stack) #game .actbar{display:flex}
+#game .actbar{grid-area:act;align-items:stretch;gap:6px;height:44px}
+body.ui-port.pt-stack .ptable.pt .pt-act{display:flex;align-items:stretch;gap:5px;min-height:0;padding:1px 0}
+body.ui-port.pt-stack .ptable.pt .pt-legend{display:none}
+.actbar .num,.pt-act .num{align-self:center;flex:0 0 auto;font-family:var(--font-display);font-weight:400;font-size:15px;min-width:26px;line-height:24px;text-align:center;border-radius:7px;background:var(--mc,#fff);color:var(--ink);border:2px solid var(--ink)}
+.actbar button,.pt-act button{flex:1;min-width:0;border:3px solid var(--ink);border-radius:10px;font-family:inherit;font-weight:800;font-size:calc(15px*var(--fsk));background:var(--ticket);color:var(--ink);box-shadow:0 3px 0 var(--ink);padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;touch-action:manipulation}
+.actbar button:active,.pt-act button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.actbar button:disabled,.pt-act button:disabled{opacity:.4;box-shadow:none}
+.actbar .go,.pt-act .go{background:var(--cool);flex:1.4}
+.actbar .dump,.pt-act .dump{flex:0 0 52px;background:#fff}
+.actbar .heatb,.pt-act .heatb{background:#fff}
+.actbar .heatb.h1{background:#ffb74d}
+.actbar .heatb.h2{background:var(--hot);color:#fff}
+.actbar .ext,.pt-act .ext{background:var(--hot);color:#fff}
+.actbar .autob,.pt-act .autob{font-size:10px;background:var(--ink);color:var(--cool);border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:middle}
+.actbar .ab-msg,.pt-act .ab-msg{flex:1;display:flex;align-items:center;justify-content:center;color:#cfe3e8;font-weight:800;font-size:13px;background:#ffffff0d;border-radius:10px}
+.actbar.s-heat .ab-msg,.pt-act.s-heat .ab-msg{color:#ffd447;animation:pulse .5s infinite alternate}
+
+/* 棚：マスの大きさ（--cs）に合わせて文字を決める */
+body.ui-port #game .half{padding:4px}
+body.ui-port .ptable.pt .half .glab,body.ui-port .ptable.pt .half .pt-corner{line-height:10px;font-size:8.5px}
+body.ui-port .ptable.pt .half .plab{font-size:9px}
+body.ui-port .ptable.pt .half .cell .sym{font-size:calc(var(--cs,30px)*.46)}
+body.ui-port .ptable.pt .half .cell .z{font-size:max(6px,calc(var(--cs,30px)*.2));top:0;left:2px}
+body.ui-port.names .ptable.pt .cell .nm{font-size:max(6px,calc(var(--cs,30px)*.2))}
+body.ui-port .ptable.pt .half .cell.ph .sym{font-size:calc(var(--cs,30px)*.32)}
+body.ui-port .ptable.pt .half .cell.p7 .sym{font-size:min(calc(var(--cs,30px)*.34),11px)}
+body.ui-port .ptable.pt .half .cell.p7 .z,body.ui-port .ptable.pt .half .cell.p7 .nm{display:none}
+body.ui-port .ptable.pt .half .cell.p7{opacity:.7}
+body.ui-port .pt-info,body.ui-port .pt-target{font-size:12px}
+body.ui-port .pt-note{font-size:9.5px}
+body.pt-stack .ptable.pt .half.R{grid-template-columns:12px repeat(9,minmax(0,1fr))}
+body.ui-port .ptable.rx .half .cell .sym{transform:scale(var(--rxk,1))}
+
+/* 縦持ちの通知：HUDの上に1行で（伝票と棚をなるべく隠さない） */
+body.ui-port #game .feed{top:2px;gap:4px;width:96%}
+body.ui-port .toast{font-size:13px;padding:3px 10px;line-height:1.35;border-width:2px}
+body.ui-port .toast small{display:inline;margin-left:6px;font-size:11px}
+body.ui-port .toast.ev{font-size:15px}
+
+/* タブレットの縦持ち：伝票が大きいときは文字も大きく */
+body.ui-port .orders.big{--fsk:1.3}
+body.ui-port.fs-s .orders.big{--fsk:1.1}
+body.ui-port.fs-l .orders.big{--fsk:1.55}
+body.ui-port .orders.big .t-top{font-size:14px}
+body.ui-port .orders.big .t-top .hint{font-size:13px;padding:2px 8px}
+#rotate .btn{min-width:0;flex:0 1 auto;font-size:14px;white-space:nowrap}

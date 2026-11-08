@@ -21,7 +21,7 @@
 
   <!-- タイトル -->
   <section id="title" class="screen on" aria-label="タイトル">
-    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。遊び方は2つから選べる。<span class="land">📱↔ ゲーム中は<b>横画面</b>で遊ぶ</span></small></h1>
+    <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。遊び方は2つから選べる。<span class="land">📱 <b>横持ち・縦持ち</b>どちらでも遊べる（⚙設定で固定もできる）</span></small></h1>
     <div class="seg gsel" id="titleGame" role="group" aria-label="ゲームモード">
       <button data-g="rx">反応式モード<small>試薬・触媒・加熱で反応を組む</small></button>
       <button data-g="atom">組成モード<small>周期表の元素で分子式を組む</small></button>
@@ -49,7 +49,7 @@
       <button class="btn sub" id="btnSettings">⚙ 設定</button>
       <button class="btn sub" id="btnMute">音: ON</button>
       <button class="btn sub" id="btnCoef">係数判定: OFF</button>
-      <button class="btn sub" data-fs>⛶ 全画面・横向き</button>
+      <button class="btn sub" data-fs>⛶ 全画面</button>
     </div>
     <div class="howto" id="howto"></div>
   </section>
@@ -97,7 +97,7 @@
   <section id="game" class="screen" aria-label="ゲーム">
     <div class="hud">
       <button class="icon" id="btnPause" aria-label="一時停止">II</button>
-      <button class="icon fsb" data-fs aria-label="全画面・横向き">⛶</button>
+      <button class="icon fsb" data-fs aria-label="全画面">⛶</button>
       <div class="pill time" id="hudTime">2:30</div>
       <div class="stage-tag" id="hudStage"></div>
       <span class="rot hudrot" id="hudRot" style="display:none"></span>
@@ -110,15 +110,16 @@
       <button class="stampbtn" id="btnStamp" aria-label="スタンプ">💬</button>
     </div>
     <div class="orders" id="orders"></div>
+    <div class="actbar" id="actbar"></div>
     <div class="ptable" id="ptable"><div class="half L" id="ptL"></div><div class="half R" id="ptR"></div></div>
     <div class="stamps" id="stamps"></div>
     <div class="feed" id="feed"></div>
     <div class="count" id="count"></div>
-    <div id="rotate" role="dialog" aria-label="横向きにしてください">
+    <div id="rotate" role="dialog" aria-label="スマホの向き">
       <div class="rot-ico">📱↻</div>
       <b>スマホを横向きにして遊ぶ</b>
-      <p>周期表（18族×7周期）や試薬棚を全部並べるため、ゲーム中は横画面用のレイアウト。</p>
-      <div class="row-btns"><button class="btn go" data-fs>⛶ 全画面で横向きにする</button><button class="btn sub" id="btnPortrait">縦のまま遊ぶ</button></div>
+      <p></p>
+      <div class="row-btns"><button class="btn go" id="btnPortrait">持ち方に合わせる</button><button class="btn sub" data-fs>⛶ 全画面にする</button></div>
     </div>
   </section>
 

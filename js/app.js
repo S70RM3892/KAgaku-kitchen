@@ -27,7 +27,7 @@ if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(SAVE.g!=='atom')SAVE.g='rx';
 SAVE.busy=Math.min(5,Math.max(1,(SAVE.busy|0)||2));
 // 表示・操作の設定（自分で選べる）
-const UI_DEF={auto:true,names:false,colors:true,fs:'m',layout:'split',repeat:true,adv:true,bgm:true,vib:true};
+const UI_DEF={auto:true,orient:'auto',names:false,colors:true,fs:'m',layout:'split',repeat:true,adv:true,bgm:true,vib:true};
 SAVE.ui=Object.assign({},UI_DEF,SAVE.ui||{});
 if((SAVE.uiv|0)<2){SAVE.ui.auto=true;SAVE.uiv=2;}
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
@@ -142,7 +142,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 // 通信で届いたトースト文面は、<small><sub><b> 以外のタグを無効化してから表示する
 const safe=h=>esc(h).replace(/&lt;(\/?(?:small|sub|b))&gt;/g,'<$1>');
 let CUR='title';
-function show(id){CUR=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));if(id!=='game')closeStamps();}
+function show(id){CUR=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));document.body.classList.toggle('in-game',id==='game');if(id!=='game')closeStamps();}
 let OVK='';
 function overlay(html,kind=''){OVK=kind;$('ovPanel').innerHTML=html;$('ov').classList.add('on');}
 function closeOverlay(){OVK='';$('ov').classList.remove('on');}
@@ -676,6 +676,7 @@ function enterGame(){
   $('mpbar').classList.toggle('on',V.mode!=='solo');
   closeStamps();
   show('game');
+  applyOrient();
   cancelAnimationFrame(UI.raf);UI.last=performance.now();UI.raf=requestAnimationFrame(frame);
   wake(true);
 }
@@ -731,6 +732,7 @@ function render(V){
   renderHUD(V);
   const so=sigOrders(V);if(so!==UI.sig.o){UI.sig.o=so;renderOrders(V);}
   const sf=sigTarget(V);if(sf!==UI.sig.f){UI.sig.f=sf;renderTarget(V);}
+  const sa=sigAct(V);if(sa!==UI.sig.a){UI.sig.a=sa;renderAct(V);}
   const sc=sigCells(V);if(sc!==UI.sig.c){UI.sig.c=sc;renderCells(V);}
   if(V.mode!=='solo'){const sm=sigMP(V);if(sm!==UI.sig.m){UI.sig.m=sm;renderMP(V);}renderRot(V);}
   renderIncoming(V);
@@ -774,7 +776,7 @@ function potInner(V,o,p){
   if(st==='heat')return `<div class="pin heat"><div class="eqp">${items.map(([id,n,x])=>`${!x&&n>1?n:''}${fmt(atom?id:fOf(id))}`).join(atom?' ':' + ')}${atom?'':` →${p.cat?`<small>${fmt(cellLabel('@'+p.cat))}</small>`:''}`}</div><div class="pbar"><i data-pbar></i></div><span class="pst">${atom||p.heat?'加熱中…':'反応中…'}</span></div>`;
   if(st==='fail')return `<div class="pin fail">✗ ${atom&&p.fail&&p.fail.label?fmt(p.fail.label)+' ':''}${esc(p.fail?p.fail.why:'失敗')}</div>`;
   if(st==='fire')return `<div class="pin fire">🔥 燃えている！ あと${4-p.taps}回</div>`;
-  if(!items.length&&!(p&&p.cat))return `<div class="pin empty">${o.id===UI.sel?(atom?'← 周期表をタップ →':'← 試薬棚をタップ →'):'空の鍋'}</div>`;
+  if(!items.length&&!(p&&p.cat))return `<div class="pin empty">${o.id===UI.sel?(isPort()?(atom?'↓ 周期表をタップ':'↓ 試薬棚をタップ'):(atom?'← 周期表をタップ →':'← 試薬棚をタップ →')):'空の鍋'}</div>`;
   // 協力：この客の鍋は1つで、中身は「入れた人ごと」に分けて並べる（自分の分を先に大きく、仲間の分は名前タグつき）。
   // 精錬は鍋の全員分を合わせて判定する
   const coop=V.mode==='coop';
@@ -857,7 +859,9 @@ function potCardSig(V,o){
 }
 function renderOrders(V){
   const slots=Math.max(V.mode==='solo'?3:4,V.max);
-  const box=$('orders');box.style.setProperty('--slots',slots);setOrderCols(box,slots);
+  const box=$('orders');
+  if(+box.style.getPropertyValue('--slots')!==slots){box.style.setProperty('--slots',slots);if(isPort())layoutGame();}
+  setOrderCols(box,slots);
   const mc=colorOf(V,me());
   if(!UI.cards)UI.cards=new Map();
   const els=[],keep=new Set();
@@ -891,6 +895,17 @@ function renderOrders(V){
 }
 // 棚の空きに「いまタップすると入る先」を表示
 function sigTarget(V){const o=V.orders.find(x=>x.id===UI.sel);return UI.sel+'|'+(o?V.orders.indexOf(o)+'|'+o.mode+E.hintsOf(V,o,me()):'-');}
+function sigAct(V){const o=V.orders.find(x=>x.id===UI.sel);return isPort()+'|'+UI.sel+'|'+V.auto+'|'+(o?V.orders.indexOf(o)+potSig(myPot(V,o)):'-');}
+function renderAct(V){
+  const host=document.body.classList.contains('pt-stack')?$('ptAct'):$('actbar');
+  if(!isPort()||!host)return;
+  const o=V.orders.find(x=>x.id===UI.sel),p=o&&myPot(V,o);
+  if(!o){host.innerHTML='<span class="ab-msg">伝票（客）をタップして選ぶ</span>';return;}
+  const st=potState(p);
+  const btns=st==='heat'?`<span class="ab-msg">${V.g==='atom'?'加熱中…':'反応中…'}</span>`:cardBtns(V,o,p);
+  host.innerHTML=`<b class="num" style="--mc:${colorOf(V,me())}">${V.orders.indexOf(o)+1}</b>${btns}`;
+  host.className=host.id==='ptAct'?'pt-act s-'+st:'actbar s-'+st;
+}
 function renderTarget(V){
   const el=$('ptTarget');if(!el)return;
   const o=V.orders.find(x=>x.id===UI.sel);
@@ -927,8 +942,9 @@ function buildTable(g){
   T.classList.toggle('rx',g!=='atom');T.classList.toggle('pt',g==='atom');T.classList.remove('dark');
   if(g==='atom'){
     // 周期表を 1〜9族（左端）と 10〜18族（右端）に分けて置く
+    const stk=document.body.classList.contains('pt-stack');
     const half=(g0,g1,side)=>{
-      const off=side==='L'?1:0,lc=side==='L'?1:g1-g0+2;
+      const off=side==='L'||stk?1:0,lc=side==='L'||stk?1:g1-g0+2;
       let h=`<div class="pt-corner" style="grid-column:${lc};grid-row:1">族</div>`;
       for(let gr=g0;gr<=g1;gr++)h+=`<div class="glab" style="grid-column:${gr-g0+1+off};grid-row:1">${gr}</div>`;
       for(let p=1;p<=7;p++)h+=`<div class="plab" style="grid-column:${lc};grid-row:${p+1}">${p}</div>`;
@@ -938,13 +954,15 @@ function buildTable(g){
     let hl=half(1,9,'L');
     for(const k of ['*La','*Ac']){
       const P=A.POS[k],nm=k==='*La'?'ランタノイド':'アクチノイド';
-      hl+=`<div class="cell c-f ph" style="grid-column:${P.g+1};grid-row:${P.p+1}" title="${nm}（${P.z0}〜${P.z1}）"><span class="z">${P.z0}-${P.z1}</span><span class="sym">${k==='*La'?'*':'**'}</span></div>`;
+      hl+=`<div class="cell c-f ph${P.p===7?' p7':''}" style="grid-column:${P.g+1};grid-row:${P.p+1}" title="${nm}（${P.z0}〜${P.z1}）"><span class="z">${P.z0}-${P.z1}</span><span class="sym">${k==='*La'?'*':'**'}</span></div>`;
     }
     hl+=`<div class="pt-info" id="ptInfo" style="grid-column:3 / 11;grid-row:2">元素をタップすると名前・周期・族が出る</div>`;
+    hl+=`<div class="pt-act" id="ptAct" style="grid-column:4 / 11;grid-row:3 / 5"></div>`;
     hl+=`<div class="pt-legend" style="grid-column:4 / 11;grid-row:3 / 5">${Object.entries(A.CATJP).map(([k,v])=>`<span><i class="c-${k}"></i>${v}</span>`).join('')}</div>`;
     let hr=half(10,18,'R');
-    hr+=`<div class="pt-target" id="ptTarget" style="grid-column:1 / 9;grid-row:2"></div>`;
-    hr+=`<div class="pt-note" style="grid-column:1 / 4;grid-row:3 / 5">10〜12族は<br>遷移元素</div>`;
+    const o2=stk?1:0;
+    hr+=`<div class="pt-target" id="ptTarget" style="grid-column:${1+o2} / ${9+o2};grid-row:2"></div>`;
+    hr+=`<div class="pt-note" style="grid-column:${1+o2} / ${4+o2};grid-row:3 / 5">10〜12族は<br>遷移元素</div>`;
     L.innerHTML=hl;R.innerHTML=hr;
   }else{
     // 試薬棚も左右に4列ずつ
@@ -952,13 +970,22 @@ function buildTable(g){
     L.innerHTML=`<div class="shelf-cap" id="ptInfo">試薬棚：タップで選んだ客の鍋へ</div>`+half(0,4)+`<div class="shelf-cap cat">触媒・脱水剤</div>`+CATS.slice(0,4).map(c=>cellHTML('@'+c)).join('');
     R.innerHTML=`<div class="shelf-cap pt-target" id="ptTarget"></div>`+half(4,8)+`<div class="shelf-cap cat">（矢印の上に書く）</div>`+CATS.slice(4).map(c=>cellHTML('@'+c)).join('');
   }
-  UI.sig.f=null;
-  requestAnimationFrame(fitTable);
+  UI.sig.f=null;UI.sig.a=null;UI.tblKey=g+'|'+document.body.classList.contains('pt-stack');
+  requestAnimationFrame(layoutGame);
 }
-function cellHTMLA(e,col){return `<button class="cell c-${e.c}" data-el="${e.s}" style="grid-column:${col??e.g+1};grid-row:${e.p+1}" aria-label="${e.s} ${A.ELNAME[e.s]||''}"><span class="z">${e.z}</span><span class="sym">${e.s}</span><span class="nm">${A.ELNAME[e.s]||''}</span><span class="bd"></span></button>`;}
-// 横画面で伝票が細くなりすぎるときは2段に折り返す
+function cellHTMLA(e,col){return `<button class="cell c-${e.c}${e.p===7?' p7':''}" data-el="${e.s}" style="grid-column:${col??e.g+1};grid-row:${e.p+1}" aria-label="${e.s} ${A.ELNAME[e.s]||''}"><span class="z">${e.z}</span><span class="sym">${e.s}</span><span class="nm">${A.ELNAME[e.s]||''}</span><span class="bd"></span></button>`;}
+// 伝票の列数と1段の高さ（横持ちは細くなりすぎるとき2段に折り返す）
 function setOrderCols(box,slots){
   const W=box.clientWidth||600;
+  if(!isPort())box.classList.remove('narrow','big');
+  if(isPort()){
+    const H=box.clientHeight,cols=portCols(slots,W,H),rows=Math.ceil(slots/cols);
+    const rowh=Math.floor(Math.min(W>=600?280:210,(H-(rows-1)*6)/rows));
+    box.classList.toggle('narrow',W/cols<170);box.classList.toggle('big',W/cols>=300&&rowh>=200);
+    box.style.setProperty('--cols',cols);box.style.setProperty('--rows',rows);
+    if(H>0)box.style.setProperty('--rowh',rowh+'px');
+    return;
+  }
   const cols=Math.max(1,Math.min(slots,Math.floor(W/104)||1,SAVE.ui.layout==='bottom'?3:2));
   const rows=Math.ceil(slots/cols);
   box.style.setProperty('--cols',cols);box.style.setProperty('--rows',rows);
@@ -966,9 +993,9 @@ function setOrderCols(box,slots){
   const H=box.clientHeight;
   if(H>0)box.style.setProperty('--rowh',Math.floor(Math.min(230,(H-(rows-1)*6)/rows))+'px');
 }
-window.addEventListener('resize',()=>{const b=$('orders');if(b)setOrderCols(b,+getComputedStyle(b).getPropertyValue('--slots')||4);});
 // 周期表のマスが縦長になりすぎないよう、行の高さをマスの幅の1.5倍までにする
 function fitTable(){
+  if(isPort())return;
   for(const H of [$('ptL'),$('ptR')]){
     if(!H)continue;
     H.style.gridTemplateRows='';H.style.alignContent='';
@@ -978,8 +1005,82 @@ function fitTable(){
     H.style.gridTemplateRows=`12px repeat(7,${Math.floor(rh)}px)`;H.style.alignContent='center';
   }
 }
-window.addEventListener('resize',()=>requestAnimationFrame(fitTable));
-window.addEventListener('orientationchange',()=>setTimeout(fitTable,300));
+
+/* ---------- 画面の向き（横持ち／縦持ち） ---------- */
+const scrPort=()=>innerHeight>innerWidth;
+const isPort=()=>document.body.classList.contains('ui-port');
+// 縦持ちの伝票の段数：3枚までは1段（縦に余裕があれば2×2で幅広に）、4枚は2×2（幅があれば1段）、5〜6枚は3×2
+const portRows=(slots,W)=>slots<=3?1:slots===4?(W>=560?1:2):2;
+const portCols=(slots,W,H=0)=>slots<=3&&H>=2*118+6?2:Math.ceil(slots/portRows(slots,W));
+function wantPort(){const o=SAVE.ui.orient;return o==='port'||(o!=='land'&&scrPort());}
+function applyOrient(){
+  const b=document.body.classList,port=wantPort(),sp=scrPort();
+  if(b.contains('ui-port')!==port&&UI.cards)for(const c of UI.cards.values()){c.pot=null;c.head=null;}
+  b.toggle('ui-port',port);b.toggle('ui-land',!port);b.toggle('scr-land',!sp);
+  // 向きを固定していて、持ち方が逆のスマホなら案内を出す
+  const mis=port!==sp&&Math.min(innerWidth,innerHeight)<600;
+  b.toggle('need-rot',mis);
+  if(mis){
+    const r=$('rotate');
+    r.querySelector('b').textContent=port?'スマホを縦向きにして遊ぶ':'スマホを横向きにして遊ぶ';
+    r.querySelector('p').textContent=port?'設定で「縦持ち」に固定している。横のまま遊ぶなら「持ち方に合わせる」にする。':'設定で「横持ち」に固定している。縦のまま遊ぶなら「持ち方に合わせる」にする。';
+    r.querySelector('.rot-ico').textContent=port?'📱↺':'📱↻';
+  }
+  // 組成モードの縦持ち：幅が足りなければ周期表を上下2段（1〜9族／10〜18族）にする
+  const G=$('game'),gw=Math.min(innerWidth,port&&!sp?innerHeight*0.62:innerWidth);
+  b.toggle('pt-stack',port&&$('ptable').classList.contains('pt')&&gw<600);
+  const V=view();
+  if(V&&CUR==='game'&&UI.tblKey!==V.g+'|'+b.contains('pt-stack')){UI.sig={};buildTable(V.g);}
+  UI.sig.a=null;
+  layoutGame();
+}
+// 縦持ち：上から HUD・伝票・（操作ボタン）・棚。棚の行の高さを画面に合わせて決め、残りを伝票に回す
+function layoutGame(){
+  const G=$('game'),T=$('ptable');if(!G)return;
+  for(const H of [$('ptL'),$('ptR')])if(H){H.style.removeProperty('grid-template-rows');H.style.removeProperty('--cs');}
+  T.style.removeProperty('--rxk');
+  const ob=$('orders'),slots=+getComputedStyle(ob).getPropertyValue('--slots')||4;
+  if(!isPort()){G.style.removeProperty('grid-template-rows');G.style.removeProperty('grid-template-areas');setOrderCols(ob,slots);fitTable();return;}
+  if(!G.classList.contains('on'))return;
+  const cs=getComputedStyle(G),gap=parseFloat(cs.rowGap)||5;
+  const W=G.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);
+  const H=G.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom);
+  const atom=T.classList.contains('pt'),stack=document.body.classList.contains('pt-stack');
+  const hud=G.querySelector('.hud').offsetHeight,mpOn=$('mpbar').classList.contains('on'),mp=mpOn?$('mpbar').offsetHeight:0;
+  const ab=$('actbar'),act=stack?0:(ab.offsetHeight||40);
+  const tr=[['hud hud','auto']];if(mpOn)tr.push(['mp mp','auto']);tr.push(['orders orders','minmax(0,1fr)']);if(!stack)tr.push(['act act','auto']);
+  const nTbl=stack?2:1;
+  const avail=H-hud-mp-act-(tr.length+nTbl-1)*gap;
+  const rows=portRows(slots,W);
+  const fsk={s:.9,m:1,l:1.15}[SAVE.ui.fs]||1;
+  const ordMin=rows*Math.round((rows>1?82:88)*fsk)+(rows-1)*6;
+  let rh,hh,tpl,cw;
+  if(atom){
+    const fix=6+8+10+7*2,units=6.6;               // 枠・余白・族の行・行間、第7周期は0.6行
+    const hw=stack?W:(W-gap)/2;cw=(hw-6-8-12-9*2)/9;
+    rh=(avail-ordMin-nTbl*fix)/(nTbl*units);
+    // スマホ（上下2段）はほぼ正方形、タブレット（1枚の周期表）は縦長1.5倍まで
+    rh=Math.floor(Math.max(22,Math.min(rh,cw*(stack?1.15:1.5),64)));
+    const r7=Math.max(14,Math.round(rh*0.6));
+    hh=fix+6*rh+r7;tpl=`10px repeat(6,${rh}px) ${r7}px`;
+  }else{
+    const fix=6+8+13+13+8*2;
+    cw=((W-gap)/2-6-8-3*2)/4;
+    rh=(avail-ordMin-fix)/7;
+    rh=Math.floor(Math.max(30,Math.min(rh,cw*1.25,64)));
+    hh=fix+7*rh;tpl=`13px repeat(6,${rh}px) 13px ${rh}px`;
+    T.style.setProperty('--rxk',Math.max(1,Math.min(1.3,(Math.min(cw,rh)-6)/34)).toFixed(2));
+  }
+  if(stack)tr.push(['tl tl',hh+'px'],['tr tr',hh+'px']);else tr.push(['tl tr',hh+'px']);
+  G.style.gridTemplateAreas=tr.map(x=>`"${x[0]}"`).join(' ');
+  G.style.gridTemplateRows=tr.map(x=>x[1]).join(' ');
+  for(const h of [$('ptL'),$('ptR')]){h.style.gridTemplateRows=tpl;h.style.setProperty('--cs',Math.floor(Math.min(cw,rh*1.3))+'px');}
+  setOrderCols(ob,slots);
+}
+let rzT=0;
+function onResize(){cancelAnimationFrame(rzT);rzT=requestAnimationFrame(applyOrient);}
+window.addEventListener('resize',onResize);
+window.addEventListener('orientationchange',()=>setTimeout(onResize,250));
 // タップした元素・試薬の情報を表示（覚えるための手がかり）
 let infoT=0;
 function showInfo(g,k){
@@ -1120,46 +1221,60 @@ function tryAdd(s,cell){
   if(cell){cell.classList.add('hit');setTimeout(()=>cell.classList.remove('hit'),80);}
   return s[0]!=='@';
 }
+// 戻り値 true：次の客へ自動で移った
+function cardAct(V,o,a,b){
+  const id=o.id,p=myPot(V,o);
+  if(a==='hint'){if(E.hintsOf(V,o,me())<2){act({t:'hint',o:id});sfx('tap');}}
+  else if(a==='react'){
+    if(p&&p.state==='idle'&&p.items.length){
+      act({t:'react',o:id});sfx('react');
+      if(SAVE.ui.adv&&UI.sel===id){const nx=V.orders.find(x=>x.id!==id&&potState(myPot(V,x))==='idle'&&!(myPot(V,x)&&myPot(V,x).items.length));if(nx){pickNext(V,id);return true;}}
+    }
+  }
+  else if(a==='heat'){if(V.g==='rx'&&(!p||p.state==='idle')){act({t:'heat',o:id,h:((p?p.heat:0)+1)%3});sfx('tap');}}
+  else if(a==='dump'){act({t:'dump',o:id});sfx('whoosh');}
+  else if(a==='ext'){act({t:'ext',o:id});sfx('whoosh');}
+  else if(a==='chip'&&p&&p.state==='idle'){act({t:'chip',o:id,s:b.dataset.s});sfx('pop');}
+  return false;
+}
+// 縦持ちの操作ボタン（選んでいる客に対して）
+function onActBar(e){
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const V=view();if(!playable(V))return;
+  e.preventDefault();
+  const o=V.orders.find(x=>x.id===UI.sel);if(!o)return;
+  cardAct(V,o,b.dataset.act,b);
+}
+$('actbar').addEventListener('pointerdown',onActBar);
+$('ptL').addEventListener('pointerdown',e=>{if(e.target.closest('.pt-act'))onActBar(e);});
 $('orders').addEventListener('pointerdown',e=>{
   const V=view();if(!playable(V))return;
   const t=e.target.closest('.ticket[data-o]');if(!t)return;
   e.preventDefault();
   const id=+t.dataset.o,o=V.orders.find(x=>x.id===id);if(!o)return;
   const p=myPot(V,o),b=e.target.closest('[data-act]');
-  if(b){
-    const a=b.dataset.act;
-    if(a==='hint'){if(E.hintsOf(V,o,me())<2){act({t:'hint',o:id});sfx('tap');}}
-    else if(a==='react'){
-      if(p&&p.state==='idle'&&p.items.length){
-        act({t:'react',o:id});sfx('react');
-        if(SAVE.ui.adv&&UI.sel===id){const nx=V.orders.find(x=>x.id!==id&&potState(myPot(V,x))==='idle'&&!(myPot(V,x)&&myPot(V,x).items.length));if(nx){pickNext(V,id);return;}}
-      }
-    }
-    else if(a==='heat'){if(V.g==='rx'&&(!p||p.state==='idle')){act({t:'heat',o:id,h:((p?p.heat:0)+1)%3});sfx('tap');}}
-    else if(a==='dump'){act({t:'dump',o:id});sfx('whoosh');}
-    else if(a==='ext'){act({t:'ext',o:id});sfx('whoosh');}
-    else if(a==='chip'&&p&&p.state==='idle'){act({t:'chip',o:id,s:b.dataset.s});sfx('pop');}
-    setSel(id);return;
-  }
+  if(b){if(!cardAct(V,o,b.dataset.act,b))setSel(id);return;}
   if(UI.sel===id&&p&&p.state==='fire'){act({t:'ext',o:id});sfx('whoosh');return;}
   setSel(id);sfx('tap');
 });
-// 全画面＋横向き固定（対応ブラウザのみ。iPhoneのSafariは非対応なのでボタンを隠す）
+// 全画面＋向きの固定（対応ブラウザのみ。iPhoneのSafariは非対応なのでボタンを隠す）
 const fsOK=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);
+const isFS=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+function lockOrient(){if(isFS()&&screen.orientation&&screen.orientation.lock)screen.orientation.lock(wantPort()?'portrait':'landscape').catch(()=>{});}
 async function goLandscape(){
   try{
     const el=document.documentElement;
     if(!(document.fullscreenElement||document.webkitFullscreenElement)){
       if(el.requestFullscreen)await el.requestFullscreen({navigationUI:'hide'});else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
-      if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock('landscape').catch(()=>{});
+      if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock(wantPort()?'portrait':'landscape').catch(()=>{});
     }else{
       if(document.exitFullscreen)await document.exitFullscreen();else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
     }
   }catch(e){}
 }
 document.querySelectorAll('[data-fs]').forEach(b=>{b.style.display=fsOK?'':'none';b.addEventListener('click',()=>{audio();goLandscape();});});
-document.body.classList.toggle('allow-portrait',!!SAVE.portrait);
-$('btnPortrait').addEventListener('click',()=>{SAVE.portrait=true;persist();document.body.classList.add('allow-portrait');});
+// 向きを固定していて持ち方が逆のとき：「持ち方に合わせる」に戻す
+$('btnPortrait').addEventListener('click',()=>{SAVE.ui.orient='auto';persist();applyOrient();lockOrient();});
 $('btnPause').addEventListener('click',()=>{const V=view();if(V&&V.running&&!V.paused)act({t:'pause'});});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){const V=view();if(CUR==='game'&&V&&V.running&&!V.paused)act({t:'pause'});}
@@ -1180,7 +1295,8 @@ $('stamps').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if
 /* ================= 設定（自分で選べるUI） ================= */
 const SETTINGS=[
   {k:'auto',t:'自動精製',d:'必要なものがそろったら自動で反応させる（ソロ用。マルチプレイはロビーでホストが決める）',o:[[false,'OFF'],[true,'ON']]},
-  {k:'layout',t:'棚の配置',d:'左右に分割：周期表を1〜9族と10〜18族に分けて両端に置き、中央に客の列。下にまとめる：タブレットや縦画面向け',o:[['split','左右に分割'],['bottom','下にまとめる']]},
+  {k:'orient',t:'画面の向き',d:'自動：持ち方に合わせて切り替わる。縦持ち：上に客の列、下に棚（周期表は1〜9族／10〜18族の上下2段）、操作ボタンは親指の届く位置',o:[['auto','自動'],['land','横持ち'],['port','縦持ち']]},
+  {k:'layout',t:'横持ちの棚の配置',d:'左右に分割：周期表を1〜9族と10〜18族に分けて両端に置き、中央に客の列。下にまとめる：タブレット向け',o:[['split','左右に分割'],['bottom','下にまとめる']]},
   {k:'adv',t:'反応後は次の客へ',d:'反応を押したら、空いている客を自動で選ぶ',o:[[true,'ON'],[false,'OFF']]},
   {k:'names',t:'元素名・試薬名',d:'棚のマスに名前も出す（覚え始め向け）',o:[[false,'出さない'],[true,'出す']]},
   {k:'colors',t:'分類の色分け',d:'OFFにすると全部同じ色。位置だけで覚える上級者向け',o:[[true,'ON'],[false,'OFF']]},
@@ -1194,8 +1310,7 @@ function applyUI(){
   b.toggle('names',!!u.names);b.toggle('mono',!u.colors);b.toggle('lay-bottom',u.layout==='bottom');
   ['s','m','l'].forEach(x=>b.toggle('fs-'+x,u.fs===x));
   UI.sig={};
-  const o=$('orders');if(o)setOrderCols(o,+getComputedStyle(o).getPropertyValue('--slots')||4);
-  requestAnimationFrame(fitTable);
+  applyOrient();
 }
 function openSettings(back){
   UI.setBack=back||null;
@@ -1209,6 +1324,7 @@ $('ov').addEventListener('click',e=>{
   const k=b.dataset.set;let v;try{v=JSON.parse(b.dataset.v);}catch(x){return;}
   SAVE.ui[k]=v;persist();sfx('tap');
   if(k==='auto'&&SES&&SES.role==='solo'&&SES.S)SES.S.auto=v;
+  if(k==='orient')lockOrient();
   applyUI();openSettings(UI.setBack);
 });
 applyUI();
