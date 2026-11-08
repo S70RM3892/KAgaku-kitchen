@@ -77,9 +77,10 @@ export function owners(S){
 }
 
 /* ---------- 生成 ---------- */
-// 客（注文）ごと×プレイヤーごとに鍋を持つ。自分が選んだ客の「自分の鍋」に入れる。仲間の鍋の中身は伝票に並んで見える
-const blankPot=()=>({items:[],cat:null,heat:0,state:'idle',t:0,dur:0,res:null,fail:null,mid:null,taps:0,burn:0,by:{},rb:null});
-const potKey=(S,pid)=>pid;
+// 客（注文）ごとに鍋を持つ。協力・ソロは客ごとに1つの鍋を全員で使い、中身は「誰が入れたか」を記録して人ごとに分けて見せる
+// （精錬は全員分を合わせて判定）。対戦は客ごと×プレイヤーごとに別々の鍋
+const blankPot=()=>({items:[],cat:null,catBy:null,heat:0,state:'idle',t:0,dur:0,res:null,fail:null,mid:null,taps:0,burn:0,by:{},rb:null});
+const potKey=(S,pid)=>S.mode==='versus'?pid:'*';
 export function potOf(S,o,pid){const k=potKey(S,pid);return o.pots[k]||(o.pots[k]=blankPot());}
 export const peekPot=(S,o,pid)=>o&&o.pots[potKey(S,pid)]||null;
 function resetPot(p){Object.assign(p,blankPot());}
@@ -122,8 +123,8 @@ export function createGame(cfg){
 export function begin(S){S.running=true;spawnOrder(S);spawnOrder(S);}
 
 function emit(S,to,e){S.ev.push(Object.assign({to},e));}
-// 鍋の持ち主へ
-function emitPot(S,key,e){emit(S,key,e);}
+// 鍋に関わる人へ（共有鍋なら全員、対戦なら持ち主）
+function emitPot(S,key,e){emit(S,key==='*'?'*':key,e);}
 export function isLocked(S,pid,k){
   if(S.so.on&&S.so.locked.includes(k))return true;
   const P=S.players[pid];return !!(P&&P.fx.lock[k]>S.elapsed);
@@ -259,7 +260,7 @@ function finishPot(S,o,key,p){
   if(serves(o.k,x.id)){autoServe(S,o,key,p,res.over||[],x.id);return;}
   if(usefulFor(o.k).has(x.main)){
     // 中間体：鍋に残る。続けて次の反応へ
-    const by=p.by,rb=p.rb;resetPot(p);p.items=[[x.main,1,1]];p.by=by;p.rb=rb;p.mid=x.id;
+    const by=p.by,rb=p.rb;resetPot(p);p.items=[[x.main,1,1,{}]];p.by=by;p.rb=rb;p.mid=x.id;
     emitPot(S,key,{h:`中間体 ${fmt(fOf(x.main))} ができた<small>続けて次の反応へ</small>`,k:'ok',s:'ready'});
     return;
   }
@@ -267,7 +268,7 @@ function finishPot(S,o,key,p){
   const why=it.via&&x.main===it.t?`製法が違う（${it.proc}で作る）`:`正解：${T.n} = ${fmt(T.f)}`;
   mistake(S,o,key,p,x.main,fOf(x.main),why,x.id);
 }
-function creditOf(S,key,p){return S.players[key]?key:S.order[0];}
+function creditOf(S,key,p){if(key!=='*')return S.players[key]?key:S.order[0];return p.rb&&S.players[p.rb]?p.rb:S.order[0];}
 function autoServe(S,o,key,p,overList,rx){
   const vs=S.mode==='versus',pid=creditOf(S,key,p),P=S.players[pid],R=RU(S),T=R.tgt(o.k);
   const C=vs?P:S.team,contrib=Object.keys(p.by);
@@ -342,10 +343,11 @@ function applyAttack(S,pid,x){
 /* ---------- アクション ---------- */
 function putIn(S,p,k,pid){
   const R=RU(S);
-  if(k[0]==='@'){const c=k.slice(1);p.cat=p.cat===c?null:c;if(p.cat)p.by[pid]=(p.by[pid]||0)+1;return true;}
+  if(k[0]==='@'){const c=k.slice(1);p.cat=p.cat===c?null:c;p.catBy=p.cat?pid:null;if(p.cat)p.by[pid]=(p.by[pid]||0)+1;return true;}
+  // items: [記号, 合計の数, 中間体なら1, {入れた人: 数}]
   const x=p.items.find(y=>y[0]===k);
-  if(x){if(x[2]||x[1]>=R.maxCoef)return false;x[1]++;}
-  else{if(p.items.length>=R.maxSpecies)return false;p.items.push([k,1,0]);}
+  if(x){if(x[2]||x[1]>=R.maxCoef)return false;x[1]++;x[3]=x[3]||{};x[3][pid]=(x[3][pid]||0)+1;}
+  else{if(p.items.length>=R.maxSpecies)return false;p.items.push([k,1,0,{[pid]:1}]);}
   p.by[pid]=(p.by[pid]||0)+1;
   return true;
 }
@@ -399,6 +401,9 @@ const ACT={
     const t=myPot(S,pid,a,false);if(!t||t.p.state!=='idle')return;
     if(a.s==='@'){t.p.cat=null;maybeAuto(S,t.o,t.p,pid);return;}
     const x=t.p.items.find(y=>y[0]===a.s);if(!x)return;
+    // 自分が入れた分から1個戻す（なければ一番多く入れた人の分）
+    const w=x[3]||{},q=w[pid]>0?pid:Object.keys(w).sort((m,n)=>w[n]-w[m])[0];
+    if(q){w[q]--;if(w[q]<=0)delete w[q];}
     x[1]--;if(x[1]<=0||x[2])t.p.items=t.p.items.filter(y=>y!==x);
     maybeAuto(S,t.o,t.p,pid);
   },

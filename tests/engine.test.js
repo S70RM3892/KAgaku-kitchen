@@ -76,9 +76,8 @@ function force(S,key){if(!S.orders.length)tick(S,0.01);const o=S.orders[0];o.k=k
   apply(S,a,{t:'add',s:'@MnO2',o:o.id});assert.equal(S.reqs.length,1);
   const other=S.orders.find(x=>x!==o);
   apply(S,b,{t:'add',s:'@MnO2',o:other?other.id:o.id});
-  assert.equal(potOf(S,o,a).cat,'MnO2','request lands in requester-selected pot');
-  assert.notEqual(potOf(S,o,b),potOf(S,o,a),'each player has an own pot per customer');
-  assert.equal(potOf(S,o,b).items.length,0,"b's own pot untouched");
+  assert.equal(potOf(S,o,a).cat,'MnO2','request lands in requester-selected customer pot');
+  assert.equal(potOf(S,o,b),potOf(S,o,a),'one pot per customer shared by the team');
   S.ev=[];apply(S,a,{t:'react',o:o.id});settle(S,o,a);
   assert.ok(!S.orders.includes(o));
   assert.deepEqual(S.ev.filter(e=>e.m&&e.m[1]==='ok').map(e=>e.to).sort(),['p0','p1']);
@@ -155,9 +154,25 @@ function cookA(S,pid,o,id){for(const [s,c] of comp(id))for(let i=0;i<c;i++)apply
   const o=force(S,'H2O');
   apply(S,own.O,{t:'add',s:'H',o:o.id});apply(S,own.O,{t:'add',s:'H',o:o.id});assert.equal(S.reqs.length,2);
   apply(S,own.H,{t:'add',s:'H',o:o.id});apply(S,own.H,{t:'add',s:'H',o:o.id});
-  assert.deepEqual(potOf(S,o,own.O).items,[['H',2,0]],'requested H went to the requester pot');
-  // 自分の担当の元素は自分の鍋へ（リクエストを消化したあと）
-  apply(S,own.H,{t:'add',s:'H',o:o.id});assert.deepEqual(potOf(S,o,own.H).items,[['H',1,0]]);
+  assert.equal(potOf(S,o,own.O).items[0][1],2,'requested H went into the customer pot');
+  assert.deepEqual(potOf(S,o,own.O).items[0][3],{[own.H]:2},'attributed to whoever tapped');
+  console.log('atom coop request ok');
+}
+// ---- 協力：客の鍋に2人がそれぞれ入れた分を合わせて自動精製（Fe・O₃ と H₃ → Fe(OH)₃） ----
+{
+  const S=createGame({g:'atom',mode:'coop',stageId:'s2',players:P2,split:true,auto:true});begin(S);
+  const own=owners(S);const o=force(S,'Fe(OH)3');
+  const a=own.Fe,b=own.H;assert.equal(own.O,a);assert.notEqual(a,b);
+  apply(S,a,{t:'add',s:'Fe',o:o.id});for(let i=0;i<3;i++)apply(S,a,{t:'add',s:'O',o:o.id});
+  assert.equal(potOf(S,o,a).state,'idle');
+  for(let i=0;i<2;i++)apply(S,b,{t:'add',s:'H',o:o.id});assert.equal(potOf(S,o,a).state,'idle','not yet');
+  apply(S,b,{t:'add',s:'H',o:o.id});assert.equal(potOf(S,o,a).state,'heat','combined contents auto-refine');
+  const by=potOf(S,o,a).items.reduce((m,x)=>{for(const q in x[3])m[q]=(m[q]||0)+x[3][q];return m;},{});
+  assert.equal(by[a],4);assert.equal(by[b],3);
+  settle(S,o,a);assert.ok(!S.orders.includes(o),'served');
+  // 自分のチップを戻すと自分の分から減る
+  const o2=force(S,'H2O');apply(S,a,{t:'add',s:'O',o:o2.id});apply(S,b,{t:'add',s:'H',o:o2.id});
+  apply(S,a,{t:'chip',o:o2.id,s:'H'});assert.equal(potOf(S,o2,a).items.find(x=>x[0]==='H'),undefined);
   console.log('atom coop ok');
 }
 for(const mode of ['solo','versus'])for(const st of ['s1','s5']){

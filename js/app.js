@@ -569,7 +569,7 @@ function showLobby(){renderLobby();show('lobby');}
 const RULES={
   coop:`<b>協力のルール</b><ul style="margin:4px 0 0;padding-left:18px">
     <li><b>棚の分担</b>：自分の担当の試薬・触媒だけ直接入れられる。色が薄く下線のあるものは仲間の担当（下線の色＝担当者）。</li>
-    <li><b>鍋は1人ずつ</b>（客ごとに自分の鍋）。伝票をタップして自分が作る客を選ぶ。同じ客を2人で別々に作っても、別々の客を作ってもいい。仲間の鍋の中身は伝票に名前つきで並んで見える。</li>
+    <li><b>客ごとに鍋が1つ</b>。伝票をタップして自分が作る客を選ぶ。入れた材料は人ごとに分けて表示され、<b>精錬は全員分を合わせて判定</b>（自分が Fe・O₃、仲間が H₃ → Fe(OH)₃）。</li>
     <li>担当外をタップすると担当者に<b>リクエスト</b>。相手の画面で光り、相手がタップすると<b>あなたが選んでいる客の鍋</b>に入る（触媒もセットされる）。</li>
     <li>注文どおりにできたら自動で提供。<b>40秒ごとに棚替え</b>。2人以上で入れた鍋は<b>連携ボーナス×1.2</b>。💬でスタンプ。</li></ul>`,
   versus:`<b>対戦のルール</b><ul style="margin:4px 0 0;padding-left:18px">
@@ -581,7 +581,7 @@ const RULES={
 const RULES_A={
   coop:`<b>協力のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
     <li><b>棚の分担</b>：周期表の族ごとに担当が決まる（2人なら奇数族と偶数族）。H（1族）とO（16族）は必ず別担当なので、水・酸・有機物は連携しないと作れない。</li>
-    <li><b>鍋は1人ずつ</b>（客ごとに自分の鍋）。伝票をタップして自分が作る客を選ぶ。仲間の鍋の中身も伝票に並んで見える。</li>
+    <li><b>客ごとに鍋が1つ</b>。入れた材料は人ごとに分けて表示され、<b>精錬は全員分を合わせて判定</b>（自分が Fe・O₃、仲間が H₃ → Fe(OH)₃）。</li>
     <li>担当外の元素をタップすると担当者に<b>リクエスト</b>。相手がタップすると<b>あなたが選んでいる客の鍋</b>に入る。</li>
     <li>注文どおりにできたら自動で提供。<b>40秒ごとに棚替え</b>。2人以上で入れた鍋は<b>連携ボーナス×1.2</b>。</li></ul>`,
   versus:`<b>対戦のルール（組成モード）</b><ul style="margin:4px 0 0;padding-left:18px">
@@ -757,7 +757,7 @@ function renderHUD(V){
   const hc=$('hudCombo');if(hc.textContent!==cb)hc.textContent=cb;
 }
 function faceFor(r){return r>0.6?'😊':r>0.3?'😐':r>0.15?'😠':'😡';}
-const potSig=p=>p?[p.state,p.items.map(a=>a.join('')).join(','),p.cat,p.heat,p.fail?p.fail.why:'',p.taps,p.mid||''].join(':'):'-';
+const potSig=p=>p?[p.state,p.items.map(a=>a[0]+a[1]+(a[2]||'')+JSON.stringify(a[3]||{})).join(','),p.cat,p.catBy,p.heat,p.fail?p.fail.why:'',p.taps,p.mid||''].join(':'):'-';
 function sigOrders(V){
   const foc=V.mode==='coop'?V.order.map(p=>V.players[p].left?'':p+'@'+V.players[p].focus).join(','):'';
   return V.max+'#'+UI.sel+'#'+V.coef+'#'+foc+'#'+V.orders.map(o=>[o.id,E.hintsOf(V,o,me()),Object.entries(o.pots).map(([k,p])=>k+'='+potSig(p)).join(';')].join(':')).join('|');
@@ -775,10 +775,24 @@ function potInner(V,o,p){
   if(st==='fail')return `<div class="pin fail">✗ ${atom&&p.fail&&p.fail.label?fmt(p.fail.label)+' ':''}${esc(p.fail?p.fail.why:'失敗')}</div>`;
   if(st==='fire')return `<div class="pin fire">🔥 燃えている！ あと${4-p.taps}回</div>`;
   if(!items.length&&!(p&&p.cat))return `<div class="pin empty">${o.id===UI.sel?(atom?'← 周期表をタップ →':'← 試薬棚をタップ →'):'空の鍋'}</div>`;
-  const chips=atom?items.map(it=>itemChip(V,it)).join(''):items.map(it=>itemChip(V,it)).join('<i class="plus">+</i>');
-  const cat=p.cat?`<span class="chip cat" data-act="chip" data-s="@">${fmt(cellLabel('@'+p.cat))}</span>`:'';
-  const mid=p.mid?`<span class="midn">中間体</span>`:'';
-  return `<div class="pin mix">${chips}${cat}${mid}</div>`;
+  // 協力：この客の鍋は1つで、中身は「入れた人ごと」に分けて並べる（自分の分を先に大きく、仲間の分は名前タグつき）。
+  // 精錬は鍋の全員分を合わせて判定する
+  const coop=V.mode==='coop';
+  const join=a=>atom?a.join(''):a.join('<i class="plus">+</i>');
+  const mid=items.filter(it=>it[2]).map(it=>itemChip(V,it));
+  const mineIt=coop?items.filter(it=>!it[2]).map(it=>[it[0],(it[3]&&it[3][me()])||0,0]).filter(it=>it[1]>0):items.filter(it=>!it[2]);
+  let h=join(mid.concat(mineIt.map(it=>itemChip(V,it))));
+  if(p.cat&&(!coop||!p.catBy||p.catBy===me()))h+=`<span class="chip cat" data-act="chip" data-s="@">${fmt(cellLabel('@'+p.cat))}</span>`;
+  if(p.mid)h+=`<span class="midn">中間体</span>`;
+  if(coop){
+    for(const q of V.order){
+      if(q===me())continue;
+      const part=items.filter(it=>!it[2]&&it[3]&&it[3][q]>0).map(it=>`<span class="mc">${atom?esc(it[0])+(it[3][q]>1?`<sub>${it[3][q]}</sub>`:''):(it[3][q]>1?it[3][q]:'')+fmt(fOf(it[0]))}</span>`);
+      if(p.cat&&p.catBy===q)part.push(`<span class="mc cat">${fmt(cellLabel('@'+p.cat))}</span>`);
+      if(part.length){const nm=V.players[q]?V.players[q].name:'?';h+=`<span class="grp" style="--dc:${colorOf(V,q)}" title="${esc(nm)}が入れた"><b>${esc([...nm][0]||'?')}</b>${part.join('')}</span>`;}
+    }
+  }
+  return `<div class="pin mix">${h||'<span class="mine-none">あなたの分はまだない</span>'}</div>`;
 }
 function cardBtns(V,o,p){
   const st=potState(p),atom=V.g==='atom',has=p&&p.items.length>0;
@@ -802,23 +816,7 @@ function cardWho(V,o,p){
   return '';
 }
 // 協力：仲間それぞれの鍋（この客のぶん）を小さく並べる。選んでいる人・中身がある人だけ
-function mateRows(V,o){
-  if(V.mode!=='coop')return '';
-  const atom=V.g==='atom';
-  const rows=V.order.filter(q=>q!==me()&&!V.players[q].left).map(q=>{
-    const P=V.players[q],mp=o.pots[q],st=potState(mp),foc=P.focus===o.id;
-    const has=mp&&(mp.items.length||mp.cat);
-    if(!foc&&!has&&st==='idle')return '';
-    let body;
-    if(st==='heat')body='<span class="ms heat">反応中…</span>';
-    else if(st==='fail')body='<span class="ms fail">✗ 失敗</span>';
-    else if(st==='fire')body='<span class="ms fire">🔥</span>';
-    else if(has)body=mp.items.map(([id,n,x])=>`<span class="mc">${atom?esc(id)+(n>1?`<sub>${n}</sub>`:''):(!x&&n>1?n:'')+fmt(fOf(id))}</span>`).join('')+(mp.cat?`<span class="mc cat">${fmt(cellLabel('@'+mp.cat))}</span>`:'');
-    else body='<span class="ms">空</span>';
-    return `<div class="mate${foc?' foc':''}" style="--dc:${colorOf(V,q)}"><b>${esc(P.name)}${foc?' ▶':''}</b>${body}</div>`;
-  }).join('');
-  return rows?`<div class="mates">${rows}</div>`:'';
-}
+function mateRows(){return '';}
 function cardClass(V,o){
   let cls='ticket card';if(o.vip)cls+=' vip';if(o.id===UI.sel)cls+=' sel';
   const st=potState(myPot(V,o));if(st==='heat')cls+=' cooking';if(st==='fire')cls+=' burning';if(st==='fail')cls+=' failed';
@@ -854,7 +852,7 @@ function headSig(V,o,k){
   return [k,o.mode,E.hintsOf(V,o,me()),who,V.coef].join('|');
 }
 function potCardSig(V,o){
-  const mates=V.mode==='coop'?V.order.filter(q=>q!==me()).map(q=>potSig(o.pots[q])+(V.players[q].focus===o.id?'f':'')+(V.players[q].left?'x':'')).join(','):'';
+  const mates=V.mode==='coop'?V.order.filter(q=>q!==me()).map(q=>(V.players[q].focus===o.id?'f':'')+(V.players[q].left?'x':'')).join(','):'';
   return potSig(myPot(V,o))+'|'+mates+'|'+(o.id===UI.sel)+'|'+V.auto;
 }
 function renderOrders(V){
