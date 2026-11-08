@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ケミカル・キッチン</title>
+<meta name="description" content="周期表の棚から元素を選んで注文の物質を合成する化学クッキングゲーム。友達と協力・対戦もできる。">
+<meta name="theme-color" content="#16323d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- タイトル -->
+  <section id="title" class="screen on" aria-label="タイトル">
+    <h1 class="logo">ケミカル・キッチン<small>注文の物質を、周期表の棚から元素を選んで合成して届けろ。</small></h1>
+
+    <div class="mp-card">
+      <div class="mp-h">友達と遊ぶ<span>2〜4人・それぞれのスマホ/PCで</span></div>
+      <label class="namebox">名前<input id="inName" maxlength="10" autocomplete="nickname" placeholder="ケミスト"></label>
+      <div class="row-btns">
+        <button class="btn go" id="btnHost">部屋を作る</button>
+        <button class="btn" id="btnJoin">部屋に入る</button>
+      </div>
+      <div class="mp-modes">
+        <div><b>協力</b>周期表の棚を分担。担当外の元素は仲間に「リクエスト」して入れてもらう</div>
+        <div><b>対戦</b>同じ注文を早い者勝ちで奪い合う。難しい物質ほど強い「おじゃま」が飛ぶ</div>
+      </div>
+    </div>
+
+    <div class="sec-title">ひとりで</div>
+    <div class="stages" id="stageList"></div>
+    <div class="row-btns">
+      <button class="btn sub" id="btnDex">物質図鑑</button>
+      <button class="btn sub" id="btnHow">遊び方</button>
+      <button class="btn sub" id="btnMute">音: ON</button>
+    </div>
+    <div class="howto">
+      <b>覚え方の仕組み</b>：注文は名前か「性質」で来る。間違えた・時間切れの物質は答えが表示され、次からよく注文される（協力・対戦でも全員の苦手が反映される）。ヒントを使うと報酬は減り、習熟（★）は上がらない。★5で習得。<br>
+      <b>判定は分子式（組成式）</b>：C₂H₆O ならエタノールでもジメチルエーテルでも同じ扱い。
+    </div>
+  </section>
+
+  <!-- ロビー -->
+  <section id="lobby" class="screen" aria-label="ロビー">
+    <div class="lob-head">
+      <button class="btn sub" id="btnLeave">退出</button>
+      <div class="room"><span>部屋コード</span><b id="lobCode">----</b></div>
+    </div>
+    <div class="invite">
+      <div class="qr" id="qr" aria-label="招待用QRコード"></div>
+      <div class="acts">
+        <button class="btn" id="btnCopy">招待リンクをコピー</button>
+        <button class="btn sub" id="btnShare">共有する</button>
+        <p class="note">友達はQRを読む／リンクを開く／トップの「部屋に入る」でコードを入力。</p>
+      </div>
+    </div>
+    <div class="lob-sec"><h4>プレイヤー <span id="lobCount"></span></h4><div class="lob-players" id="lobPlayers"></div></div>
+    <div class="lob-sec">
+      <h4>モード</h4>
+      <div class="seg" id="lobMode"><button data-mode="coop">協力</button><button data-mode="versus">対戦</button></div>
+    </div>
+    <div class="howto rules" id="lobRules"></div>
+    <div class="lob-sec">
+      <h4>ステージ</h4>
+      <div class="lob-stages" id="lobStages"></div>
+      <label class="toggle" id="lobSplitRow"><input type="checkbox" id="lobSplit" checked>棚を分担する（OFFにすると全員が全元素を使える）</label>
+    </div>
+    <div class="lob-foot">
+      <button class="btn go" id="btnStart">開店する</button>
+      <p class="note" id="lobWait"></p>
+    </div>
+  </section>
+
+  <!-- ゲーム -->
+  <section id="game" class="screen" aria-label="ゲーム">
+    <div class="hud">
+      <button class="icon" id="btnPause" aria-label="一時停止">II</button>
+      <div class="pill time" id="hudTime">2:30</div>
+      <div class="stage-tag" id="hudStage"></div>
+      <div class="incoming" id="incoming"></div>
+      <div class="pill score"><span class="combo" id="hudCombo"></span><span id="hudScore">0</span></div>
+    </div>
+    <div class="mpbar" id="mpbar">
+      <div class="who" id="mpWho"></div>
+      <span class="rot" id="mpRot"></span>
+      <button class="stampbtn" id="btnStamp" aria-label="スタンプ">💬</button>
+    </div>
+    <div class="orders" id="orders"></div>
+    <div class="flasks" id="flasks"></div>
+    <div class="ptable" id="ptable"></div>
+    <div class="stamps" id="stamps"></div>
+    <div class="feed" id="feed"></div>
+    <div class="count" id="count"></div>
+  </section>
+
+  <!-- 図鑑 -->
+  <section id="dex" class="screen" aria-label="物質図鑑">
+    <div class="dex-head"><h2>物質図鑑</h2><button class="btn sub" style="flex:0 0 auto;min-width:0" id="btnDexBack">戻る</button></div>
+    <div class="dex-sum" id="dexSum"></div>
+    <div class="dex-list" id="dexList"></div>
+  </section>
+
+  <div class="overlay" id="ov"><div class="panel" id="ovPanel"></div></div>
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
