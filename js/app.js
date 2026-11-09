@@ -514,7 +514,7 @@ function hostStep(){
   const ses=SES;if(!ses||!ses.S)return;
   const now=performance.now(),dt=Math.min(0.25,(now-ses.lastT)/1000);ses.lastT=now;
   E.tick(ses.S,dt);flushEvents();
-  if(ses.role==='host'&&((ses.dirty&&now-(ses.lastSnap||0)>=40)||now-(ses.lastSnap||0)>=100))sendSnaps();
+  if(ses.role==='host'&&((ses.dirty&&now-(ses.lastSnap||0)>=30)||now-(ses.lastSnap||0)>=250))sendSnaps();
   if(ses.S.over&&!ses.ended){ses.ended=true;onGameOver();}
 }
 function flushEvents(){
@@ -525,11 +525,33 @@ function flushEvents(){
   }
   ses.S.ev.length=0;ses.dirty=true;
 }
+// 送るのは「前回から変わった項目」だけ。残り時間などの刻々と減る値は参加者側で同じように進めているので、
+// 比べるときは除き、1秒ごとの全体送信でずれを直す。ホストの判断（ack）やイベントがあるときは必ず送る
+const TICKING=new Set(['left','t','burn','wait','spawnT','elapsed']);
+const shapeOf=v=>JSON.stringify(v,(k,x)=>TICKING.has(k)?undefined:x);
+const FULL_MS=1000;
 function sendSnaps(){
   const ses=SES;if(!ses||ses.role!=='host'||!ses.S)return;
-  const s=E.snapshot(ses.S);
-  for(const [cid,pid] of ses.cids){ses.net.send(cid,{t:'s',s,ack:ses.acks[pid]||0,ev:ses.q[pid]||[]});ses.q[pid]=[];}
-  ses.dirty=false;ses.lastSnap=performance.now();
+  const s=E.snapshot(ses.S),now=performance.now(),sh={};
+  for(const k in s)sh[k]=shapeOf(s[k]);
+  ses.last=ses.last||{};
+  for(const [cid,pid] of ses.cids){
+    const L=ses.last[pid]||(ses.last[pid]={sh:{},full:-1e9,ack:-1});
+    const full=now-L.full>=FULL_MS,ack=ses.acks[pid]||0,ev=ses.q[pid]||[];
+    const d={};let n=0;
+    for(const k in s)if(full||L.sh[k]!==sh[k]){d[k]=s[k];L.sh[k]=sh[k];n++;}
+    if(!n&&!ev.length&&ack===L.ack)continue;          // 伝えることが無ければ送らない
+    if(full)L.full=now;L.ack=ack;
+    ses.net.send(cid,{t:'s',d,f:full?1:0,ack,ev});ses.q[pid]=[];
+  }
+  ses.dirty=false;ses.lastSnap=now;
+}
+// 操作が届いたら待たずに知らせる（ただし30ms以内の連打はまとめる）
+function sendSoon(){
+  const ses=SES;if(!ses||ses.role!=='host')return;ses.dirty=true;
+  const wait=30-(performance.now()-(ses.lastSnap||0));
+  if(wait<=0){clearTimeout(ses.soonT);ses.soonT=0;sendSnaps();}
+  else if(!ses.soonT)ses.soonT=setTimeout(()=>{ses.soonT=0;if(SES===ses&&ses.dirty)sendSnaps();},wait);   // 次のループを待たない
 }
 function handleEvent(e){
   if(e.m)applyMastery(e.m);
@@ -552,7 +574,7 @@ function act(a){
     const q=++ses.seq;
     if(PREDICT.has(a.t)&&ses.V){ses.pending.push({q,a});E.apply(ses.V,ses.me,a);ses.V.ev=[];ses.V.log=[];}
     ses.net.send({t:'a',q,a});
-  }else if(ses.S){E.apply(ses.S,ses.me,a);flushEvents();}
+  }else if(ses.S){E.apply(ses.S,ses.me,a);flushEvents();if(ses.role==='host')sendSoon();}
 }
 
 /* ================= 部屋を作る（ホスト） ================= */
@@ -601,7 +623,7 @@ function hostOnMessage(ses,cid,m){
   if(m.t==='a'){
     if(typeof m.q!=='number'||m.q<=(ses.acks[pid]||0))return;
     ses.acks[pid]=m.q;
-    if(ses.S&&ses.inGame){E.apply(ses.S,pid,m.a);flushEvents();}
+    if(ses.S&&ses.inGame){E.apply(ses.S,pid,m.a);flushEvents();sendSoon();}
   }else if(m.t==='w'){ses.wts[pid]=cleanWeights(m.w);}
   else if(m.t==='bye'){ses.net.drop(cid);hostOnClose(ses,cid);}
 }
@@ -646,7 +668,7 @@ function hostStartGame(){
     cfg.pool=pool.length>=4?pool:null;
   }
   stopHostLoop();
-  ses.S=E.createGame(cfg);ses.inGame=true;ses.ended=false;
+  ses.S=E.createGame(cfg);ses.inGame=true;ses.ended=false;ses.last={};
   for(const p of players)if(p.id!==ses.me)ses.q[p.id]=[];
   closeOverlay();
   ses.net.broadcast({t:'start',s:E.snapshot(ses.S)});
@@ -698,10 +720,11 @@ function clientOnMessage(ses,m){
       if(CUR==='lobby')renderLobby();break;
     case 'start':
       if(!m.s||!ses.me)return;
-      ses.pending=[];ses.V=prepView(m.s);ses.ended=false;closeOverlay();enterGame();countdown(()=>{});break;
+      ses.pending=[];ses.base=m.s;ses.V=prepView(cloneState(m.s));ses.ended=false;closeOverlay();enterGame();countdown(()=>{});break;
     case 's':
-      if(!m.s||!ses.me||ses.ended)return;
-      ses.V=reconcile(ses,m.s,m.ack|0);
+      if(!m.d||!ses.me||ses.ended||!ses.base)return;
+      if(m.f)ses.base=m.d;else Object.assign(ses.base,m.d);
+      ses.V=reconcile(ses,cloneState(ses.base),m.ack|0);
       if(Array.isArray(m.ev))m.ev.forEach(handleEvent);
       break;
     case 'end':
@@ -720,6 +743,7 @@ function clientOnClose(ses){
   overlay(`<h2>接続が切れた</h2><p>ホストとの通信が途切れた。ホストがアプリを閉じたか、回線が不安定。</p><div class="row-btns"><button class="btn go" data-ov="rejoin" data-code="${esc(ses.code)}">入り直す</button><button class="btn sub" data-ov="menu">トップへ</button></div>`);
 }
 function prepView(s){s.ev=[];s.log=[];return s;}
+const cloneState=typeof structuredClone==='function'?s=>structuredClone(s):s=>JSON.parse(JSON.stringify(s));
 function reconcile(ses,s,ack){
   prepView(s);
   ses.pending=ses.pending.filter(p=>p.q>ack);
@@ -927,7 +951,8 @@ function countdown(cb){
 }
 function frame(now){
   const dt=Math.min(0.1,(now-UI.last)/1000);UI.last=now;
-  if(SES&&SES.role==='client'&&SES.V)E.advance(SES.V,dt);
+  // 参加者は、ホストの状態の写し（base）と画面用の状態（V）の両方の時間を進める（次の差分が届くまでの補間）
+  if(SES&&SES.role==='client'&&SES.V){E.advance(SES.V,dt);if(SES.base)E.advance(SES.base,dt);}
   const V=view();
   if(V&&CUR==='game')render(V);
   UI.raf=requestAnimationFrame(frame);

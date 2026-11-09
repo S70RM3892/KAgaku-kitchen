@@ -1,7 +1,7 @@
 // 通信層：ホスト1人＋参加者最大3人のスター型。
 // 本番は PeerJS（WebRTC。シグナリングは PeerJS の無料クラウド、届かない回線では PeerJS の TURN 経由）。
 // ?net=local を付けると同じブラウザ内のタブ同士を BroadcastChannel でつなぐ（テスト用）。
-export const PROTO=7;
+export const PROTO=8;
 const PREFIX='kagaku-kitchen-v1-';
 const CODE_CH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export function newCode(){let s='';for(let i=0;i<4;i++)s+=CODE_CH[Math.floor(Math.random()*CODE_CH.length)];return s;}
@@ -105,7 +105,8 @@ export class ClientNet{
       const peer=new window.Peer(peerOpts());this.peer=peer;
       peer.on('error',e=>{if(!done)fail(e);else if(e&&(e.type==='peer-unavailable'))this._lost();});
       peer.on('open',()=>{
-        const conn=peer.connect(PREFIX+code,{reliable:true,serialization:'json'});this.conn=conn;
+        // 送るのは自前でJSON化した文字列なので、PeerJS側では包み直さない（二重のJSON化をやめる）
+        const conn=peer.connect(PREFIX+code,{reliable:true,serialization:'raw'});this.conn=conn;
         conn.on('open',()=>{if(done)return;done=true;clearTimeout(to);res();});
         conn.on('data',d=>{const m=dec(d);if(m)this.h.onMessage(m);});
         conn.on('close',()=>this._lost());
