@@ -442,7 +442,8 @@ body.need-rot #game.on #rotate{display:flex}
 /* =================== 横画面レイアウト =================== */
 @media (orientation:landscape) and (min-width:560px){
   #app{max-width:none}
-  .screen:not(#game){left:50%;right:auto;width:min(100%,700px);transform:translateX(-50%)}
+  /* 中央寄せは transform を使わない（iOS Safari はスクロールする要素を transform で動かすと、タッチの当たり判定がずれて右半分が反応しなくなる） */
+  .screen:not(#game){left:0;right:0;margin:0 auto;width:min(100%,700px)}
 }
 :where(body.ui-land) #game.screen.on{display:grid}
 :where(body.ui-land) #game{--side:clamp(200px,27vw,330px);grid-template-columns:var(--side) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);
@@ -587,7 +588,7 @@ body.fs-l{--fsk:1.2}
     grid-template-areas:"tl hud tr" "tl mp tr" "tl orders tr"}
 body.lay-bottom:where(.ui-land) #game{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) minmax(0,1.25fr);
     grid-template-areas:"hud hud" "mp mp" "orders orders" "tl tr"}
-:where(body.ui-land) #game .stamps{bottom:10px;left:50%;transform:translateX(-50%);top:auto;right:auto}
+:where(body.ui-land) #game .stamps{bottom:10px;left:0;right:0;margin:0 auto;width:max-content;top:auto}
 
 /* 客のカード：鍋の中身をいつも見せる */
 .ticket.card{display:flex;flex-direction:column;gap:3px;padding:4px 6px 10px;min-height:0;overflow:hidden}
