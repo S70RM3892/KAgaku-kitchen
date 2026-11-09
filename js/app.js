@@ -85,10 +85,10 @@ function applyMastery(m,g=curG()){
   const x=mst(m[0],g);
   switch(m[1]){
     case 'seen':x.seen++;break;
-    case 'ok':x.box=Math.min(5,x.box+1);x.ok++;break;
-    case 'okh':x.ok++;break;
-    case 'ng':x.box=0;x.ng++;break;
-    case 'exp':x.box=Math.max(0,x.box-1);x.ng++;break;
+    case 'ok':x.box=Math.min(5,x.box+1);x.ok++;x.t=Date.now();break;
+    case 'okh':x.ok++;x.t=Date.now();break;
+    case 'ng':x.box=0;x.ng++;x.t=Date.now();break;
+    case 'exp':x.box=Math.max(0,x.box-1);x.ng++;x.t=Date.now();break;
   }
   persistSoon();
 }
@@ -671,6 +671,156 @@ function kakoManage(){
 }
 $('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');if(!b)return;if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
 
+/* ================= 特訓（単元 × ルール）・今日の10問・今日の復習・誤答ノート ================= */
+const DRILL_BANKS=['kmath','kphy','kchem','quiz'];
+const BANKN={kmath:'京大数学',kphy:'共テ物理',kchem:'共テ化学',quiz:'物質クイズ'};
+const DRULES=[
+  {id:'std',name:'通常',d:'10問。ヒントが少しずつ出る'},
+  {id:'ta',name:'タイムアタック',d:'90秒（数学は150秒）で何問正解できるか'},
+  {id:'surv',name:'サバイバル',d:'1回まちがえる・答えられないまで何問続くか'},
+  {id:'open',name:'じっくり',d:'ヒントを全部見て、時間をかけて考える'},
+];
+const QZMAJOR={org:'有機化合物',ion:'無機物質',atom:'組成（気体・無機・有機）'};
+const PMAJOR={mech:'力学',heat:'熱',wave:'波動',em:'電磁気',atom:'原子'};
+const CMAJOR={law:'法則（まとめ）',phen:'現象・性質（まとめ）',qty:'量・定数（まとめ）',poly:'高分子（まとめ）',cry:'結晶の構造',bond:'化学結合・分子間力'};
+function catLabel(g,c){
+  const B=E.QBANK[g];if(B.CATN&&B.CATN[c])return B.CATN[c];
+  const [a,b]=c.split(':');if(a==='atom'&&A.CATNAME[b])return A.CATNAME[b];return b||a;
+}
+function majorLabel(g,a){
+  if(g==='quiz'&&QZMAJOR[a])return QZMAJOR[a];if(g==='kphy'&&PMAJOR[a])return PMAJOR[a];if(g==='kchem'&&CMAJOR[a])return CMAJOR[a];
+  const B=E.QBANK[g];if(B.CATN){const c=Object.keys(B.CATN).find(c=>c.split(':')[0]===a);if(c)return B.CATN[c].replace(/（.*$/,'');}
+  return QZMAJOR[a]||a;
+}
+// 単元：分野（大きなまとまり）と細かい分類のうち、5問以上あるもの（同じ問題の組は1つにまとめる）
+const UNIT_CACHE={};
+function drillUnits(g){
+  if(UNIT_CACHE[g])return UNIT_CACHE[g];
+  const B=E.QBANK[g],by={},maj={};
+  for(const k of B.ALL){const c=B.Q[k].cat,a=c.split(':')[0];(by[c]=by[c]||[]).push(k);(maj[a]=maj[a]||[]).push(k);}
+  const units=[{id:'all',name:'全範囲',ids:B.ALL.slice()}];
+  const same=(x,y)=>x.length===y.length&&x.every(v=>y.includes(v));
+  for(const [a,ids] of Object.entries(maj))if(ids.length>=5&&!units.some(u=>same(u.ids,ids)))units.push({id:'m:'+a,name:majorLabel(g,a),ids});
+  for(const [c,ids] of Object.entries(by))if(ids.length>=5&&!units.some(u=>same(u.ids,ids)))units.push({id:'c:'+c,name:catLabel(g,c),ids,sub:true});
+  return UNIT_CACHE[g]=units;
+}
+const drillCount=()=>DRILL_BANKS.reduce((a,g)=>a+drillUnits(g).length*DRULES.length,0);
+// 今日の10問：日付と科目で決まる10問（その日はだれがやっても同じ）
+function seedRand(str){let h=2166136261;for(const c of str){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return ()=>{h+=0x6D2B79F5;let t=h;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296;};}
+function dailyOrder(g,day=dayKey(new Date())){const r=seedRand(day+'|'+g),a=E.QBANK[g].ALL.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.slice(0,10);}
+const dailyDone=(g,day=dayKey(new Date()))=>((SAVE.daily||{})[day]||{})[g]||null;
+function dailyStreak(){const d=new Date();const has=x=>Object.keys((SAVE.daily||{})[dayKey(x)]||{}).length>0;if(!has(d))d.setDate(d.getDate()-1);let n=0;while(has(d)){n++;d.setDate(d.getDate()-1);}return n;}
+// 今日の復習：覚え具合（0〜5）に合わせて間をあけて出す（0:すぐ 1:1日 2:2日 3:4日 4:7日 5:15日後）
+const SRS_DAYS=[0,1,2,4,7,15];
+function dueIds(g){
+  const M=SV(g).mastery,now=Date.now();
+  return Object.keys(M).filter(k=>{const m=M[k];if(!m||!m.seen||!(m.ok+m.ng)||!knownKey(g,k))return false;
+    return m.t?(now-m.t)/864e5>=SRS_DAYS[Math.min(5,m.box|0)]:(m.box|0)<=2;});
+}
+const noteIds=g=>{const M=SV(g).mastery;return Object.keys(M).filter(k=>M[k]&&M[k].ng>0&&knownKey(g,k)).sort((a,b)=>(M[b].ng-M[b].ok)-(M[a].ng-M[a].ok));};
+function goalLine(){const D=statDay(),n=D.ok+D.ng,goal=+(SAVE.ui.goal||30);
+  return `<div class="goal-line ${n>=goal?'met':''}">${n>=goal?'🎯 今日の目標達成！':'🎯 今日の目標まで あと'+(goal-n)+'問'}<span>${n} / ${goal}問</span><i style="width:${Math.min(100,Math.round(n*100/goal))}%"></i></div>`;}
+function drillStart(g,unit,rule){
+  const R=DRULES.find(x=>x.id===rule)||DRULES[0];
+  startSolo('s1',g,{rule,drill:`${g}|${unit.id}|${rule}`,pool:unit.ids,qn:rule==='std'||rule==='open'?Math.min(10,unit.ids.length):undefined,label:`${BANKN[g]}・${unit.name}・${R.name}`});
+}
+function drillHub(){
+  const H=UI.dh||(UI.dh={g:'kmath',rule:'std'});const day=dayKey(new Date());
+  const units=drillUnits(H.g),D=SAVE.drill||{},R=DRULES.find(x=>x.id===H.rule);
+  const best=u=>{const b=D[`${H.g}|${u.id}|${H.rule}`];return b?(H.rule==='ta'?`${b.best}問`:H.rule==='surv'?`${b.best}連続`:`${b.best}点`):'—';};
+  overlay(`<h2>🎯 特訓</h2>
+    ${goalLine()}
+    <div class="dh-sec">📅 今日の10問 <small>連続 ${dailyStreak()}日（毎日同じ10問。だれがやっても同じ）</small></div>
+    <div class="dh-grid">${DRILL_BANKS.map(g=>{const d=dailyDone(g,day);return `<button class="dh-card ${d?'done':''}" data-dd="${g}"><span>${BANKN[g]}</span><b>${d?`✓ ${d.ok}/10`:'挑戦'}</b></button>`;}).join('')}</div>
+    <div class="dh-sec">🔁 今日の復習 <small>忘れかけた問題を、覚え具合に合わせて間をあけて出す</small></div>
+    <div class="dh-grid">${DRILL_BANKS.map(g=>{const n=dueIds(g).length;return `<button class="dh-card" data-dr="${g}" ${n?'':'disabled'}><span>${BANKN[g]}</span><b>${n?n+'問':'なし'}</b></button>`;}).join('')}</div>
+    <div class="dh-sec">🧩 単元 × ルール <small>全 ${drillCount()} モード</small></div>
+    <div class="seg dh-rules">${DRULES.map(x=>`<button data-hr="${x.id}" class="${x.id===H.rule?'on':''}">${x.name}</button>`).join('')}</div>
+    <p class="note dh-rd">${esc(R.d)}</p>
+    <div class="seg dh-banks">${DRILL_BANKS.map(g=>`<button data-hb="${g}" class="${g===H.g?'on':''}">${BANKN[g]}</button>`).join('')}</div>
+    <div class="dh-units">${units.map((u,i)=>`<button class="dh-unit${u.sub?' sub':''}" data-du="${i}"><span>${esc(u.name)}</span><small>${u.ids.length}問</small><b>${best(u)}</b></button>`).join('')}</div>
+    <div class="row-btns"><button class="btn sub" data-ov="note">📒 誤答ノート</button><button class="btn go" data-ov="close">閉じる</button></div>`,'drill');
+}
+function drillResults(r){
+  const ok=r.team.served,ng=r.team.failed,score=r.team.score,rule=r.rule||'std',key=r.drill,cfg=(SES&&SES.cfg)||{};
+  const metric=rule==='ta'||rule==='surv'?ok:score;
+  SAVE.drill=SAVE.drill||{};const prev=(SAVE.drill[key]||{}).best||0,isBest=metric>prev&&metric>0;
+  if(isBest)SAVE.drill[key]={best:metric,at:Date.now()};
+  if(rule==='daily'){const day=dayKey(new Date());SAVE.daily=SAVE.daily||{};const D=SAVE.daily[day]||(SAVE.daily[day]={});if(!D[r.g]||ok>D[r.g].ok)D[r.g]={ok,score};
+    const ks=Object.keys(SAVE.daily).sort();if(ks.length>400)ks.slice(0,ks.length-400).forEach(k=>delete SAVE.daily[k]);}
+  persist();
+  const name={std:'特訓',ta:'タイムアタック',surv:'サバイバル',open:'じっくり',daily:'今日の10問'}[rule]||'特訓';
+  const big=rule==='ta'?`${ok}<span style="font-size:18px">問正解</span>`:rule==='surv'?`${ok}<span style="font-size:18px">問連続</span>`:rule==='daily'?`${ok}<span style="font-size:18px"> / 10</span>`:`${score}<span style="font-size:18px">点</span>`;
+  UI.shareText=`ケミカル・キッチン「${cfg.label||E.GAMES[r.g]}」${name}：${rule==='ta'?ok+'問正解':rule==='surv'?ok+'問連続':rule==='daily'?ok+'/10':score+'点'}！`;
+  overlay(`<h2>${name}${isBest?' 🎉':''}</h2><p class="dr-lab">${esc(cfg.label||E.GAMES[r.g])}</p>
+    <div class="big-score">${big}</div>
+    <div style="font-size:12px;font-weight:800">${isBest?'自己ベスト更新！':`自己ベスト ${Math.max(prev,metric)}${rule==='ta'?'問':rule==='surv'?'連続':rule==='daily'?'':'点'}`}</div>
+    <div class="stats"><div>正解<b>${ok}</b></div><div>誤答<b>${ng}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
+    ${goalLine()}${nightNote()}${reviewHTML(r,'solo')}
+    <div class="row-btns"><button class="btn sub mini" data-ov="share">📤 結果を共有</button></div>
+    <div class="row-btns"><button class="btn go" data-ov="retry">もう一回</button><button class="btn" data-ov="drill">特訓メニュー</button><button class="btn sub" data-ov="menu">メニュー</button></div>`,'result');
+}
+function noteOverlay(){
+  const H=UI.nb||(UI.nb={g:DRILL_BANKS.find(g=>noteIds(g).length)||'kmath'});
+  const ids=noteIds(H.g),B=E.QBANK[H.g],M=SV(H.g).mastery;
+  overlay(`<h2>📒 誤答ノート</h2><p class="note">まちがえた・答えられなかった問題（ヒントは全部見られる）。まちがいが多い順。</p>
+    <div class="seg dh-banks">${DRILL_BANKS.map(g=>`<button data-nb="${g}" class="${g===H.g?'on':''}">${BANKN[g]} ${noteIds(g).length}</button>`).join('')}</div>
+    ${ids.length?`<div class="row-btns"><button class="btn go" data-nplay="${H.g}">ここから ${Math.min(10,ids.length)}問 出題</button></div>`:''}
+    <div class="nb-list">${ids.length?ids.slice(0,80).map(k=>{const q=B.Q[k],m=M[k];return `<details class="nb-it"><summary><b>${esc(q.n)}</b><small>正解 ${m.ok}・まちがい ${m.ng}</small></summary><ol>${q.clues.map(c=>`<li>${esc(c)}</li>`).join('')}</ol></details>`;}).join(''):'<p class="note">この科目で、まちがえた問題はまだない</p>'}</div>
+    <div class="row-btns"><button class="btn sub" data-ov="drillback">特訓へ</button><button class="btn go" data-ov="close">閉じる</button></div>`,'note');
+}
+$('ov').addEventListener('click',e=>{
+  if(OVK==='drill'){
+    const H=UI.dh;let b;
+    if((b=e.target.closest('[data-hr]'))){H.rule=b.dataset.hr;drillHub();return;}
+    if((b=e.target.closest('[data-hb]'))){H.g=b.dataset.hb;drillHub();return;}
+    if((b=e.target.closest('[data-du]'))){const u=drillUnits(H.g)[+b.dataset.du];if(u){closeOverlay();drillStart(H.g,u,H.rule);}return;}
+    if((b=e.target.closest('[data-dd]'))){const g=b.dataset.dd;closeOverlay();startSolo('s1',g,{rule:'daily',drill:`${g}|daily|${dayKey(new Date())}`,order:dailyOrder(g),pool:E.QBANK[g].ALL.slice(),label:`${BANKN[g]}・今日の10問`});return;}
+    if((b=e.target.closest('[data-dr]'))){const g=b.dataset.dr,ids=dueIds(g);if(!ids.length)return;closeOverlay();startSolo('s1',g,{rule:'std',drill:`${g}|review|std`,pool:ids,qn:Math.min(10,ids.length),label:`${BANKN[g]}・今日の復習`});return;}
+  }
+  if(OVK==='note'){
+    let b;
+    if((b=e.target.closest('[data-nb]'))){UI.nb.g=b.dataset.nb;noteOverlay();return;}
+    if((b=e.target.closest('[data-nplay]'))){const g=b.dataset.nplay,ids=noteIds(g);closeOverlay();startSolo('s1',g,{rule:'std',drill:`${g}|note|std`,pool:ids,qn:Math.min(10,ids.length),label:`${BANKN[g]}・誤答ノート`});return;}
+  }
+});
+$('btnDrill').addEventListener('click',()=>{audio();drillHub();});
+$('btnNote').addEventListener('click',()=>{audio();noteOverlay();});
+
+// 就寝前ガード：就寝時刻の1時間前〜5時は、ゲームを始める前に止める（「5分だけ」で一時的に解除）
+function bedGuard(go){
+  const b=SAVE.ui.bed===undefined?'23:30':SAVE.ui.bed;if(!b||b==='off')return false;
+  if(Date.now()<(UI.bedOk||0))return false;
+  const [hh,mm]=b.split(':').map(Number),B=hh*60+mm,d=new Date(),N=d.getHours()*60+d.getMinutes();
+  const since=((N-(B-60))%1440+1440)%1440;   // 就寝1時間前からの経過（分）
+  if(since>=60+300)return false;             // 就寝時刻の5時間後（だいたい朝）まで
+  UI.bedGo=go;
+  overlay(`<h2>🌙 もう寝る時間</h2><p>就寝時刻は <b>${esc(b)}</b>。寝る前の1時間は画面を見ないほうが寝つきがよく、覚えたことも睡眠中に定着する。今日はここまでにしろ。</p>
+    <p class="note">就寝時刻は ⚙設定で変えられる（「なし」で止めない）。</p>
+    <div class="row-btns"><button class="btn go" data-ov="close">今日はやめる</button><button class="btn sub" data-ov="bed5">5分だけやる</button></div>`,'bed');
+  return true;
+}
+// 結果の共有（共有できない端末ではコピー）
+async function shareResult(text){
+  const url=location.origin+location.pathname;
+  try{if(navigator.share){await navigator.share({title:'ケミカル・キッチン',text,url});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  const b=document.querySelector('[data-ov="share"]');
+  try{await navigator.clipboard.writeText(text+' '+url);if(b)b.textContent='📋 コピーした ✓';}catch(e){if(b)b.textContent='共有できなかった';}
+}
+// 学習データの書き出し・読み込み（機種変更用。過去問の画像は含めない）
+function exportSave(){
+  const blob=new Blob([JSON.stringify({app:'chem-kitchen',v:2,at:new Date().toISOString(),save:SAVE})],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`kagaku-kitchen-${dayKey(new Date())}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+document.addEventListener('change',async e=>{
+  if(e.target.id!=='impFile'||!e.target.files[0])return;
+  let d=null;try{d=JSON.parse(await e.target.files[0].text());}catch(err){}
+  if(!d||d.app!=='chem-kitchen'||!d.save||typeof d.save!=='object'||!d.save.rx){overlay(`<h2>読み込めなかった</h2><p>ケミカル・キッチンで書き出したファイルを選ぶ。</p><button class="btn go" data-ov="close">閉じる</button>`);return;}
+  UI.impSave=d.save;
+  overlay(`<h2>記録を読み込む</h2><p>${esc(String(d.at||'').slice(0,10))} に書き出した記録で、<b>この端末の今の記録を上書きする</b>。よければ「読み込む」。</p>
+    <div class="row-btns"><button class="btn go" data-ov="impok">読み込む</button><button class="btn sub" data-ov="close">やめる</button></div>`,'imp');
+});
+
 /* ================= 学習記録ダッシュボード ================= */
 // 項目の名前と分類（苦手の一覧・分類ごとの正答率に使う）
 function itemInfo(g,k){
@@ -940,15 +1090,18 @@ $('dexList').addEventListener('click',e=>{
 });
 
 /* ================= ソロ ================= */
-function startSolo(stageId,g=SAVE.g){
+function startSolo(stageId,g=SAVE.g,extra=null){
+  if(bedGuard(()=>startSolo(stageId,g,extra)))return;
   if(g==='kako'&&!(stageId==='rv'?reviewPool(g).length:E.stageById(g,stageId).pool.length)){kakoNeedOverlay();return;}
   leaveSession(true);
   const st=E.stageById(g,stageId);
   let pool=null;
   if(st.pool==='review'){const p=reviewPool(g);pool=p.length?p:Object.keys(myWeights(g));}
   const cfg={g,busy:SAVE.busy,auto:SAVE.ui.auto,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
+  if(extra){Object.assign(cfg,{rule:extra.rule,drill:extra.drill,order:extra.order,qn:extra.qn,label:extra.label,extra});if(extra.pool)cfg.pool=extra.pool;}
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
+  if(extra){countdown(beginLocal);return;}
   if(!(g==='atom'?SAVE.tutA:g==='org'?SAVE.tutO:g==='ion'?SAVE.tutI:ENG.includes(g)||E.isQuiz(g)?SAVE['tut_'+g]:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
   else countdown(beginLocal);
 }
@@ -2229,6 +2382,8 @@ $('stamps').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if
 
 /* ================= 設定（自分で選べるUI） ================= */
 const SETTINGS=[
+  {k:'goal',t:'1日の目標（問題数）',d:'特訓・結果画面に、今日の達成具合を出す',o:[[20,'20'],[30,'30'],[50,'50'],[100,'100']]},
+  {k:'bed',t:'就寝時刻',d:'この1時間前から朝5時ごろまでは、ゲームを始める前に止める（睡眠を守る）',o:[['off','なし'],['22:30','22:30'],['23:00','23:00'],['23:30','23:30'],['0:00','0:00']]},
   {k:'rank',t:'全国ランキングに参加',d:'ソロの点数を、タイトル画面の名前で公開ランキングに送る（本名は避けろ）',o:[[true,'ON'],[false,'OFF']]},
   {k:'auto',t:'自動精製',d:'必要なものがそろったら自動で反応させる（ソロ用。マルチプレイはロビーでホストが決める）',o:[[false,'OFF'],[true,'ON']]},
   {k:'orient',t:'画面の向き',d:'自動：持ち方に合わせて切り替わる。縦持ち：上に客の列、下に棚（周期表は1〜9族／10〜18族の上下2段）、操作ボタンは親指の届く位置',o:[['auto','自動'],['land','横持ち'],['port','縦持ち']]},
@@ -2249,10 +2404,13 @@ function applyUI(){
   applyOrient();
 }
 function openSettings(back){
-  UI.setBack=back||null;if(SAVE.ui.rank===undefined)SAVE.ui.rank=true;
+  UI.setBack=back||null;if(SAVE.ui.rank===undefined)SAVE.ui.rank=true;if(SAVE.ui.goal===undefined)SAVE.ui.goal=30;if(SAVE.ui.bed===undefined)SAVE.ui.bed='23:30';
   const rows=SETTINGS.map(x=>`<div class="set-row"><div class="set-t"><b>${x.t}</b>${x.d?`<small>${x.d}</small>`:''}</div>
     <div class="seg set-seg">${x.o.map(([v,l])=>`<button data-set="${x.k}" data-v='${JSON.stringify(v)}' class="${SAVE.ui[x.k]===v?'on':''}">${l}</button>`).join('')}</div></div>`).join('');
-  overlay(`<h2>⚙ 設定</h2><div class="settings">${rows}</div><div class="row-btns"><button class="btn go" data-ov="setclose">閉じる</button></div>`,'settings');
+  overlay(`<h2>⚙ 設定</h2><div class="settings">${rows}</div>
+    <div class="set-row"><div class="set-t"><b>学習記録の引っ越し</b><small>この端末の記録（習熟度・学習記録・特訓のベスト）をファイルに書き出す／読み込む。過去問の画像は含まない</small></div>
+      <div class="row-btns"><button class="btn sub mini" data-ov="export">書き出す</button><label class="btn sub mini">読み込む<input type="file" id="impFile" accept="application/json,.json" hidden></label></div></div>
+    <div class="row-btns"><button class="btn go" data-ov="setclose">閉じる</button></div>`,'settings');
 }
 $('btnSettings').addEventListener('click',()=>{audio();openSettings(null);});
 $('ov').addEventListener('click',e=>{
@@ -2283,7 +2441,14 @@ $('ov').addEventListener('click',e=>{
       closeOverlay();
       if(SES&&SES.role==='host')hostToLobby();else leaveSession(false);
       break;
-    case 'retry':{const id=SES&&SES.cfg?SES.cfg.stageId:'s1',g=SES&&SES.cfg?SES.cfg.g:SAVE.g;closeOverlay();startSolo(id,g);break;}
+    case 'retry':{const id=SES&&SES.cfg?SES.cfg.stageId:'s1',g=SES&&SES.cfg?SES.cfg.g:SAVE.g,ex=SES&&SES.cfg?SES.cfg.extra:null;closeOverlay();startSolo(id,g,ex);break;}
+    case 'drill':leaveSession(false);drillHub();break;
+    case 'note':noteOverlay();break;
+    case 'drillback':drillHub();break;
+    case 'bed5':{UI.bedOk=Date.now()+5*60e3;closeOverlay();const go=UI.bedGo;UI.bedGo=null;if(go)go();break;}
+    case 'export':exportSave();break;
+    case 'impok':{try{localStorage.setItem(SAVE_KEY,JSON.stringify(UI.impSave));}catch(e){}location.reload();break;}
+    case 'share':shareResult(UI.shareText||'');break;
     case 'next':{const g=SES&&SES.cfg?SES.cfg.g:SAVE.g,ST=stagesOf(g),i=ST.findIndex(s=>s.id===(SES&&SES.cfg&&SES.cfg.stageId));closeOverlay();if(ST[i+1])startSolo(ST[i+1].id,g);break;}
     case 'menu':leaveSession(false);break;
     case 'leave':leaveSession(false);break;
@@ -2425,6 +2590,7 @@ function starsRow(stars,score){
   return `<div class="res-stars">${[0,1,2].map(k=>`<span class="${k<s?'on':''}" style="animation-delay:${k*0.25}s">★</span>`).join('')}</div>`;
 }
 function soloResults(r){
+  if(r.drill)return drillResults(r);
   const g=GK(r.g),B=SV(g).best,ST=stagesOf(g);
   const st=E.stageById(g,r.stageId),score=r.team.score,bk=busyKey(st.id,r.busy),stars=r.stars;
   const prev=B[bk]||0;if(score>prev)B[bk]=score;persist();
@@ -2437,8 +2603,9 @@ function soloResults(r){
     <div class="stats"><div>${E.isQuiz(r.g)?'正解':'提供'}<b>${r.team.served}</b></div><div>${E.isQuiz(r.g)?'誤答':'失敗'}<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>`;
   const rkOk=RK.ranked(r.g,st.id),rkey=rankKey(r.g,st.id,r.busy,SES&&SES.cfg&&SES.cfg.coef);
   if(rkOk)h+=`<div class="rk-me" id="rkMe">${rankOn()?'🏆 全国ランキングに送信中…':'🏆 全国ランキングに参加していない（⚙設定で変えられる）'}</div>`;
-  h+=nightNote()+reviewHTML(r,'solo');
-  h+=`<div class="row-btns">${canNext?'<button class="btn go" data-ov="next">次のステージ</button>':''}<button class="btn" data-ov="retry">もう一回</button><button class="btn sub" data-ov="menu">メニュー</button></div>`;
+  UI.shareText=`ケミカル・キッチン「${E.GAMES[r.g]}」${st.name}で ${score}点！`;
+  h+=goalLine()+nightNote()+reviewHTML(r,'solo');
+  h+=`<div class="row-btns"><button class="btn sub mini" data-ov="share">📤 結果を共有</button></div><div class="row-btns">${canNext?'<button class="btn go" data-ov="next">次のステージ</button>':''}<button class="btn" data-ov="retry">もう一回</button><button class="btn sub" data-ov="menu">メニュー</button></div>`;
   overlay(h,'result');
   if(rkOk&&rankOn())RK.submit(r.g,rkey,myName(),score).then(j=>{
     const el=$('rkMe');if(!el||!j)return;

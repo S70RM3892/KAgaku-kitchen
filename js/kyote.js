@@ -15,7 +15,7 @@ export function makeBank(raw,catName,stages,review,extra){
     return out;
   };
   const ids=f=>ALL.filter(k=>f(Q[k]));
-  return {Q,ALL,known:k=>!!Q[k],choices,STAGES:stages(ids),REVIEW:review};
+  return {Q,ALL,known:k=>!!Q[k],choices,STAGES:stages(ids),REVIEW:review,CATN:catName};
 }
 const ST=(id,lvl,name,desc,pool,o={})=>Object.assign({id,lvl,name,desc,pool,clue:'name',fb:1,time:300,qn:10,reveal:4,nch:4,max:0,spawn:1,life:1,stars:[120,240,360]},o);
 const RV={id:'rv',name:'苦手克服ラン',desc:'間違えた・答えられなかった問題だけで出題',pool:'review',clue:'name',fb:1,time:300,qn:10,reveal:4,nch:4,max:0,spawn:1,life:1,stars:null};

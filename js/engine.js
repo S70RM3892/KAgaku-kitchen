@@ -216,6 +216,15 @@ export function createGame(cfg){
     // 時間ではなく問題数で終わる（時間は、全問だれも答えなかったときの上限）
     // 制限時間は「ヒントが出そろう時間＋最後に考える時間」を問題数ぶん（数学・過去問のように考える時間が長い束にも合わせる）
     S.t=S.total=S.qz.total*(7*S.qz.reveal+(QBANK[g].tail||QUIZ_TAIL)+4);
+    // 特訓のルール（ソロ用）：タイムアタック・サバイバル・じっくり・今日の10問
+    const rule=['ta','surv','open','daily'].includes(cfg.rule)?cfg.rule:'std',slow=(QBANK[g].tail||0)>=30;
+    S.qz.rule=rule;S.drill=cfg.drill?String(cfg.drill).slice(0,80):null;
+    if(cfg.qn)S.qz.total=Math.max(1,cfg.qn|0);
+    if(rule==='ta'){S.qz.total=9999;S.qz.reveal=2;S.t=S.total=slow?150:90;}               // 時間内に何問正解できるか
+    else if(rule==='surv'){S.qz.total=9999;S.t=S.total=36000;}                              // 1回まちがえる（答えられない）まで
+    else if(rule==='open'){S.qz.reveal=0;S.qz.tail=slow?120:45;S.t=S.total=S.qz.total*(S.qz.tail+4);}   // ヒントを全部見せて考える
+    else if(rule==='daily'&&Array.isArray(cfg.order)){S.qz.order=cfg.order.filter(k=>QBANK[g].known(k));S.qz.total=S.qz.order.length||1;S.t=S.total=S.qz.total*(7*S.qz.reveal+(QBANK[g].tail||QUIZ_TAIL)+4);}
+    else if(cfg.qn)S.t=S.total=S.qz.total*(7*S.qz.reveal+(QBANK[g].tail||QUIZ_TAIL)+4);
   }
   cfg.players.forEach((p,i)=>{
     S.players[p.id]={id:p.id,name:String(p.name||'ケミスト').slice(0,10),slot:p.slot??i,
@@ -451,18 +460,24 @@ function ignite(S,o,key,p){
 /* ---------- 早押しクイズ ---------- */
 function nextQuiz(S){
   const Z=S.qz;
-  if(Z.n>=Z.total){Z.done=true;return;}
+  if(Z.n>=Z.total||Z.stop){Z.done=true;return;}
+  if(Z.order){   // 今日の10問：決まった順に出す
+    const k=Z.order[Z.n];Z.used.push(k);Z.n++;
+    Z.q={id:++S.uid,k,no:Z.n,clues:QB(S).Q[k].clues,shown:1,t:0,state:'open',choices:QB(S).choices(k,Z.nch),locked:{},by:null,wait:0};
+    emit(S,'*',{s:'pop',m:[k,'seen']});return;
+  }
   let cand=S.pool.filter(k=>!Z.used.includes(k));if(!cand.length){Z.used=[];cand=S.pool.slice();}
   // 苦手（習熟度の低いもの）ほど出やすい
   const ws=cand.map(k=>{const b=S.w[k]||0;return S.rv?Math.pow(6-b,2):1+(5-b)*1.2;});
   let r=Math.random()*ws.reduce((a,b)=>a+b,0),k=cand[cand.length-1];
   for(let i=0;i<cand.length;i++){r-=ws[i];if(r<=0){k=cand[i];break;}}
   Z.used.push(k);Z.n++;
-  Z.q={id:++S.uid,k,no:Z.n,clues:QB(S).Q[k].clues,shown:1,t:0,state:'open',choices:QB(S).choices(k,Z.nch),locked:{},by:null,wait:0};
+  Z.q={id:++S.uid,k,no:Z.n,clues:QB(S).Q[k].clues,shown:Z.rule==='open'?QB(S).Q[k].clues.length:1,t:0,state:'open',choices:QB(S).choices(k,Z.nch),locked:{},by:null,wait:0};
   emit(S,'*',{s:'pop',m:[k,'seen']});
 }
 function endQuiz(S,by){
   const Z=S.qz,q=Z.q;q.state='done';q.by=by;q.wait=QUIZ_WAIT;
+  if(Z.rule==='surv'&&!by)Z.stop=true;   // サバイバル：まちがえた・答えられなかったら、答えを見せて終わり
   if(!by){S.log.push({k:q.k,ok:false,why:'正解者なし',by:null,mode:'name',ci:0});emit(S,'*',{h:`正解は ${QB(S).Q[q.k].n}${QB(S).answer?`（${QB(S).answer(q.k)}）`:''}`,k:'ng',s:'expire'});}
 }
 function tickQuiz(S,dt){
@@ -470,7 +485,7 @@ function tickQuiz(S,dt){
   if(q.state==='open'){
     q.t+=dt;
     if(q.shown<q.clues.length&&q.t>=q.shown*Z.reveal){q.shown++;emit(S,'*',{s:'tick'});}
-    if(q.shown>=q.clues.length&&q.t>=q.clues.length*Z.reveal+(QB(S).tail||QUIZ_TAIL))endQuiz(S,null);
+    if(q.shown>=q.clues.length&&q.t>=q.clues.length*Z.reveal+(Z.tail||QB(S).tail||QUIZ_TAIL))endQuiz(S,null);
   }else{q.wait-=dt;if(q.wait<=0)nextQuiz(S);}
 }
 function answerQuiz(S,pid,P,c){
@@ -677,6 +692,7 @@ export function advance(V,dt){
 export function results(S){
   return {
     g:S.g,busy:S.busy,mode:S.mode,stageId:S.stageId,n:S.n,stars:S.stars,team:S.team,coef:S.coef,
+    rule:S.qz?S.qz.rule:null,drill:S.drill||null,
     players:S.order.map(id=>{const P=S.players[id];return {id,name:P.name,slot:P.slot,score:P.score,served:P.served,failed:P.failed,
       maxCombo:P.maxCombo,atoms:P.atoms,sent:P.sent,recv:P.recv,offset:P.offset,pts:P.pts,hints:P.hints,left:P.left};}),
     log:S.log

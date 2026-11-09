@@ -953,3 +953,24 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .sw-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--sd-grid)}.sw-row:last-child{border-bottom:0}
 .sw-row b{display:block;font-size:14px}.sw-row small{font-size:11px;color:#3c5560;font-weight:700}
 .sd-card .note{color:#3c5560;font-weight:700}.sd-foot{font-size:11px;font-weight:700;color:#3c5560;margin:4px 0}
+/* =================== 特訓・誤答ノート =================== */
+.goal-line{position:relative;background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px 10px 12px;margin:6px 0;font-weight:800;font-size:13px;display:flex;justify-content:space-between;overflow:hidden}
+.goal-line span{color:#3c5560}.goal-line i{position:absolute;left:0;bottom:0;height:6px;background:#2a78d6}.goal-line.met i{background:#178a4f}
+.dh-sec{font-weight:800;margin:10px 0 4px;font-size:14px}.dh-sec small{font-size:11px;color:#3c5560;margin-left:6px}
+.dh-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.dh-card{background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;font-weight:800;font-size:12px;color:var(--ink)}
+.dh-card b{font-size:15px}.dh-card.done{background:#e8f6ee}.dh-card:disabled{opacity:.45}
+.seg.dh-rules,.seg.dh-banks{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:4px 0}
+.seg.dh-rules button,.seg.dh-banks button{padding:6px 2px;font-size:12px;color:var(--ink);background:#fff;border:2px solid var(--ink);border-radius:8px;font-weight:800}
+.seg.dh-rules button.on,.seg.dh-banks button.on{background:var(--ticket)}
+.dh-rd{margin:2px 0 4px}
+.dh-units{display:flex;flex-direction:column;gap:4px;max-height:42vh;overflow:auto}
+.dh-unit{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;text-align:left;background:#fff;border:2px solid var(--ink);border-radius:8px;padding:6px 10px;font-weight:800;color:var(--ink);font-size:14px}
+.dh-unit.sub{margin-left:14px;font-size:13px}.dh-unit small{color:#3c5560;font-size:11px}.dh-unit b{font-family:var(--font-display);font-size:15px;min-width:3.5em;text-align:right}
+.dr-lab{font-weight:800;margin:0 0 4px;color:#3c5560;font-size:13px}
+.nb-list{display:flex;flex-direction:column;gap:4px;max-height:50vh;overflow:auto}
+.nb-it{background:#fff;border:2px solid var(--ink);border-radius:8px;padding:6px 10px}
+.nb-it summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px;font-size:14px}.nb-it summary small{color:#3c5560;font-weight:800;font-size:11px}
+.nb-it ol{margin:6px 0 0;padding-left:1.4em;font-size:13px;line-height:1.6}
+.seg.dh-rules button,.seg.dh-banks button{font-family:inherit;letter-spacing:0;text-shadow:none;-webkit-text-stroke:0}
+.dh-sec small,.dh-rd{color:#3c5560;font-weight:700}

@@ -45,6 +45,16 @@ Promise.all([import('../js/kyote.js'),import('../js/kmath.js')]).then(([{KPHY,KC
   for(const st of KMATH.STAGES){const S=createGame({g:'kmath',mode:'solo',stageId:st.id,players:[{id:'p0',name:'me'}]});begin(S);
     let guard=0;while(!S.over&&guard++<200000)tick(S,0.1);assert.equal(results(S).log.length,S.qz.total,'kmath '+st.id+' all questions asked before time runs out');}
   console.log('kmath ok',KMATH.ALL.length,'questions');
+  // 特訓のルール：タイムアタックは時間で終わる／サバイバルは最初のまちがいで終わる／じっくりはヒントが最初から全部／今日の10問は決まった順
+  {const P=[{id:'p0',name:'me'}],play=(cfg,act)=>{const S=createGame({g:'kmath',mode:'solo',stageId:'s1',players:P,...cfg});begin(S);let n=0;while(!S.over&&n++<400000){act(S);tick(S,0.1);}return S;};
+   const ta=play({rule:'ta',drill:'t'},S=>{const q=S.qz.q;if(q&&q.state==='open'&&q.t>1)apply(S,'p0',{t:'ans',c:q.k});});
+   assert.ok(ta.over&&Math.abs(ta.elapsed-150)<0.2&&results(ta).log.filter(l=>l.ok).length>=10,'time attack ends by time');
+   const sv=play({rule:'surv',drill:'s'},S=>{const q=S.qz.q;if(q&&q.state==='open'&&q.t>1)apply(S,'p0',{t:'ans',c:S.qz.n<5?q.k:q.choices.find(c=>c!==q.k)});});
+   assert.equal(results(sv).log.filter(l=>l.ok).length,4,'survival: 4 right then ends at the first miss');assert.equal(results(sv).log.length,5);
+   const op=createGame({g:'kmath',mode:'solo',stageId:'s1',players:P,rule:'open'});begin(op);assert.equal(op.qz.q.shown,op.qz.q.clues.length,'open shows every hint');
+   const ord=KMATH.ALL.slice(5,15),dl=play({rule:'daily',order:ord},S=>{});assert.deepEqual(results(dl).log.map(l=>l.k),ord,'daily asks the fixed 10 in order');
+   const nr=play({},S=>{});assert.ok(!results(nr).drill&&results(nr).rule==='std','normal play unchanged');
+   console.log('drill rules ok');}
   for(const [g,B] of [['kphy',KPHY],['kchem',KCHEM],['kmath',KMATH]]){
     if(g!=='kmath')assert.equal(new Set(B.ALL.map(k=>B.Q[k].n)).size,B.ALL.length,g+' unique names');   // 数学は答えの値が重なってよい
     for(const k of B.ALL){assert.ok(B.Q[k].clues.length>=3,k);const c=B.choices(k,6);assert.ok(c.includes(k)&&c.length===6);}
