@@ -7,6 +7,7 @@ import {ROOTM,SYNM,WORDM} from './eng.js';
 import * as QZ from './quiz.js';
 import * as KK from './kakomon.js';
 import * as RK from './rank.js';
+import * as KSRC from './kakosrc.js';
 import * as E from './engine.js';
 import {HostNet,ClientNet,PROTO,normCode} from './net.js';
 const {COLORS,STAMPS}=E;
@@ -383,7 +384,12 @@ function kakoImportDialog(){
     <p>大学入試センターの<b>問題PDFと正解PDF</b>（物理・化学、何年分でも）をまとめて選ぶ。年度・科目・どの正解がどの問題のものかは自動で判断する。</p>
     <div class="row-btns"><label class="btn go kk-file">ファイルを選ぶ<input type="file" id="kkFiles" accept="application/pdf,.pdf" multiple hidden></label>
     <label class="btn sub kk-file kk-dir">フォルダごと<input type="file" id="kkDir" webkitdirectory multiple hidden></label></div>
-    <p class="note">選ぶだけで、切り取り・正解の割り当て・保存まで全部自動で行う。</p>
+    <p class="note">選ぶだけで、切り取り・正解の割り当て・保存まで全部自動で行う。スキャンしたPDF（画像だけのPDF）は文字を読み取るので、1科目1分ほどかかる。</p>
+    <details class="kk-get"><summary>📥 過去問のPDFを手に入れる（2004〜2026年度）</summary>
+      <p class="note">押すと配布元のPDFが開く。保存（共有 →「"ファイル"に保存」など）してから、上の「ファイルを選ぶ」でまとめて選ぶ。
+      年度・科目・問題か正解かはファイル名から自動で見分ける。出どころ：<a href="${KSRC.SOURCE}" target="_blank" rel="noopener">日本の学校「大学入学共通テスト問題＆解答」</a></p>
+      <div class="kk-years">${[...new Set(KSRC.CATALOG.map(c=>c.year))].sort((a,b)=>b-a).map(y=>`<div class="kk-yr"><b>${y}</b>${KSRC.CATALOG.filter(c=>c.year===y).map(c=>`<span>${esc(c.label)} <a href="${esc(c.q)}" target="_blank" rel="noopener">問題</a> <a href="${esc(c.a)}" target="_blank" rel="noopener">正解</a></span>`).join('')}</div>`).join('')}</div>
+    </details>
     <p class="note" id="kkMsg">読み込みはこの端末の中だけで行う。</p>
     <div class="row-btns"><button class="btn sub" data-ov="close">やめる</button></div>`,'kakoimp');
   $('kkFiles').addEventListener('change',e=>kakoReadFiles([...e.target.files]));
@@ -396,12 +402,12 @@ async function kakoReadFiles(files){
   try{
     for(const [i,f] of files.entries()){
       if(msg)msg.textContent=`読み込み中… ${i+1} / ${files.length}：${f.name}`;
-      const P=await KK.parseProblemPdf(f);
-      if(P.meta.isAns||!P.items.length){const A=await KK.parseAnswerPdf(f);if(A.count)KKI.A.push(A);}else KKI.P.push(P);
+      const prog=t=>{if(msg)msg.textContent=`${i+1} / ${files.length}　${t}`;};
+      const P=await KK.parseProblemPdf(f,prog);
+      if(P.meta.isAns||!P.items.length){const A=await KK.parseAnswerPdf(f,prog,P);if(A.count)KKI.A.push(A);}else KKI.P.push(P);
     }
     for(const P of KKI.P){
-      P.items=KK.autoFix(P.items);
-      KK.bestAssign(P.items,KK.pickAnswers(P,KKI.A));
+      KK.assignAll(P,KKI.A);
       P.items.forEach(it=>{it.P=P;it.adj={top:0,bottom:0};KKI.items.push(it);});
     }
     // 同じ年度・科目・大問・問が重なったら枝番を付けて分ける
@@ -412,6 +418,7 @@ async function kakoReadFiles(files){
       it.leadImg=it.lead?await KK.renderSeg(it.P,it.lead):null;
     }
   }catch(err){if(msg)msg.textContent='読み込めなかった：'+(err&&err.message||err);return;}
+  import('./ocr.js').then(O=>O.ocrDone()).catch(()=>{});
   if(!KKI.items.length){if(msg)msg.textContent=`問題が見つからなかった（正解PDF ${KKI.A.length}件）。問題PDFも選ぶ`;return;}
   // そのまま自動で保存する（手直しはあとから「読み込んだ過去問」でできる）
   const recs=await kakoSave();

@@ -3,6 +3,7 @@
 // （過去問には著作権があるため。公開サイトに置くのは仕組みだけ）。
 // 早押しのエンジンからは「問題の束（bank）」として見える：Q[id] = {k,n,cat,clues,ans,slots}
 
+import {lookup} from './kakosrc.js';
 /* ================= 問題の束 ================= */
 export const SLICES=8;                 // シャッターが開く段数（ヒントの数の代わり）
 const Q={};
@@ -75,6 +76,7 @@ async function pageLines(page){
 }
 // 年度・科目をファイル名や1ページ目の文字から推測する（違っていたら手直し画面で直す）
 function guessMeta(name,text){
+  const L=lookup(name);if(L)return {year:L.year,subj:L.subj,isAns:L.isAns,known:true};
   const s=Z2H(name+' '+text);
   let year=null;
   const m1=s.match(/(19[89]\d|20[0-4]\d)/);if(m1)year=+m1[1];
@@ -83,22 +85,44 @@ function guessMeta(name,text){
   if(!year&&fn)year=(fn[1].toLowerCase()==='r'?2018:1988)+ +fn[2];
   const m2=s.match(/令和\s*(\d+|元)\s*年/);if(!year&&m2)year=2018+(m2[1]==='元'?1:+m2[1]);
   const m3=s.match(/平成\s*(\d+)\s*年/);if(!year&&m3)year=1988+ +m3[1];
-  const subj=/化学/.test(s)?'chem':/物理/.test(s)?'phy':'phy';
-  const isAns=/正解|解答\s*(用紙|例|表)|配点/.test(name)||/正\s*解/.test(text.slice(0,400))&&/配\s*点/.test(text.slice(0,600));
+  const nm=String(name).toLowerCase();
+  const subj=/kagaku/.test(nm)?'chem':/bu(t)?suri|buturi/.test(nm)?'phy':/化学/.test(s)?'chem':/物理/.test(s)?'phy':'phy';
+  const isAns=/正解|解答\s*(用紙|例|表)|配点/.test(name)||/answer|_ans\b|_ans\.|seikai|kaitou/i.test(name)||/正\s*解/.test(text.slice(0,400))&&/配\s*点/.test(text.slice(0,600));
   return {year:year||new Date().getFullYear(),subj,isAns};
 }
 // 問題のPDFを解析：「第n問」「問n」の見出しで区切り、解答番号（本文中に順に現れる小さな数字）を拾う
-export async function parseProblemPdf(file){
+// 文字の入っていない（スキャンした）PDFかどうか：最初の数ページに文字がほとんど無い
+const isScan=pages=>pages.slice(0,4).reduce((a,p)=>a+p.lines.reduce((b,l)=>b+l.text.length,0),0)<40;
+const OCR_SCALE=2;   // 文字を読むときの解像度（約144dpi）
+async function ocrPages(pages,onProg,label,opt){
+  const O=await import('./ocr.js');
+  for(const p of pages){
+    if(onProg)onProg(`${label}：文字を読み取り中… ${p.no} / ${pages.length}ページ`);
+    const vp=p.page.getViewport({scale:OCR_SCALE}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
+    await p.page.render({canvasContext:g,viewport:vp}).promise;
+    p.lines=await O.ocrLines(c,OCR_SCALE,opt);p.ocr=true;
+  }
+}
+export async function parseProblemPdf(file,onProg){
   const lib=await pdfjs();
   const buf=await file.arrayBuffer();
   const doc=await lib.getDocument({data:new Uint8Array(buf),cMapUrl:new URL('../vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true}).promise;
   const pages=[];
   for(let i=1;i<=doc.numPages;i++){const p=await doc.getPage(i);pages.push(Object.assign(await pageLines(p),{page:p,no:i}));}
+  const scan=isScan(pages);
+  // スキャンした問題：答えのPDF（1〜2ページ）は表として読む。問題は全ページを読む
+  const meta0=guessMeta(file.name,'');
+  // スキャンの正解（1〜2ページ）は表として別に読むので、ここでは読まない
+  if(scan&&(doc.numPages<=2||meta0.isAns))return {doc,pages,meta:Object.assign(meta0,{isAns:true}),items:[],file:file.name,scan};
+  if(scan)await ocrPages(pages,onProg,file.name,{});
   const first=pages.slice(0,2).map(p=>p.lines.map(l=>l.text).join(' ')).join(' ');
   const meta=guessMeta(file.name,first);
   // 本文の上下の余白（ページ番号などのヘッダ・フッタ）を除く
   pages.forEach(p=>{
-    const body=p.lines.filter(l=>l.y>p.h*0.05&&l.y<p.h*0.95&&!/^[-−–ー―‐－\s]*\d+[-−–ー―‐－\s]*$/.test(l.text.trim()));
+    // ページの上下の端にある、数字まじりの短い行（「― 94 ―」「(2605—94)」などのページ番号・印刷番号）も除く
+    const edge=l=>{const t=l.text.replace(/\s/g,'');return (l.y<p.h*0.09||l.y>p.h*0.91)&&!/問/.test(t)&&((t.length<=16&&/\d/.test(t))||/^(物理|化学)$/.test(t));};   // 「物理」などの柱も除く
+    const body=p.lines.filter(l=>l.y>p.h*0.05&&l.y<p.h*0.95&&!/^[-−–ー―‐－一\s]*\d+[-−–ー―‐－一\s]*$/.test(l.text.trim())&&!edge(l));
     p.body=body;p.top=body.length?Math.max(0,body[0].top-6):p.h*0.05;p.bottom=body.length?Math.min(p.h,body[body.length-1].y+8):p.h*0.95;
   });
   // 見出しを順に拾う
@@ -106,33 +130,52 @@ export async function parseProblemPdf(file){
   for(const p of pages)for(const l of p.body){
     const t=l.text.trim();
     let m=t.match(/^第\s*(\d+)\s*問/);if(m){marks.push({kind:'dai',n:+m[1],page:p.no,y:l.top-4});continue;}
-    m=t.match(/^問\s*(\d+)/);if(m&&l.x<p.w*0.35){marks.push({kind:'q',n:+m[1],page:p.no,y:l.top-4});}
+    m=t.match(/^問\s*(\d+)/);if(m&&l.x<p.w*0.35){let n=+m[1];if(n>9)n=+String(n)[0];   // 共テの問は9まで（「問4 1.0mol」を41と読むのを防ぐ）
+      marks.push({kind:'q',n,page:p.no,y:l.top-4,x:l.x});continue;}
+    // 大問の中の「A」「B」の区切り（その後の問の前置き文になる）。左端にあり、すぐ後に日本語が続くもの
+    m=t.match(/^([ABCＡＢＣ])[\s_.,、。|]*(?=[^\x00-\x7F])/);if(m&&l.x<p.w*0.25)marks.push({kind:'part',n:m[1],page:p.no,y:l.top-4,x:l.x});
   }
+  // 目次や注意書きのように「第1問」「第2問」…が続けて並ぶだけのもの（間に「問」が無く、同じ大問があとでまた出る）は見出しではない
+  for(let i=marks.length-1;i>=0;i--){const mk=marks[i];
+    if(mk.kind==='dai'&&marks[i+1]&&marks[i+1].kind==='dai'&&marks.slice(i+1).some(x=>x.kind==='dai'&&x.n===mk.n))marks.splice(i,1);}
   // 解答番号：独立した1〜2桁の数字で、次に来るはずの番号と一致するものを順に拾う
   const slots=[];let next=1;
-  for(const p of pages)for(const l of p.body)for(const t of l.t){const s=Z2H(t.s).trim();if(/^\d{1,2}$/.test(s)&&+s===next){slots.push({n:next,page:p.no,y:t.y});next++;}}
+  for(const p of pages)for(const l of p.body)for(const t of l.t){const s=Z2H(t.s).trim();if(/^\d{1,2}$/.test(s)&&+s===next&&(!p.ocr||t.box)){slots.push({n:next,page:p.no,y:t.y});next++;}}
   // 区間を作る
   const pos=(pg,y)=>pg*100000+y;
   const items=[],leads={};let dai=0;
   marks.forEach((mk,i)=>{
     const end=marks[i+1]||{page:pages.length,y:pages[pages.length-1].bottom,end:true};
     const seg={from:{page:mk.page,y:mk.y},to:{page:end.page,y:end.y}};
+    if(mk.kind==='part'){
+      // 区切りの見出しは、問の見出しとほぼ同じ左端にあるものだけ（式の中の A などを除く）
+      const qx=marks.filter(x=>x.kind==='q').map(x=>x.x);const near=qx.length&&qx.some(x=>Math.abs(x-mk.x)<20);
+      if(near&&marks[i+1]&&marks[i+1].kind==='q'){leads[dai]=seg;}
+      return;
+    }
     if(mk.kind==='dai'){
       dai=mk.n;
-      if(marks[i+1]&&marks[i+1].kind==='q'){leads[dai]=seg;return;}
+      if(marks[i+1]&&(marks[i+1].kind==='q'||marks[i+1].kind==='part')){leads[dai]=seg;return;}
       // 「問」の見出しが無い大問は、大問全体を1問として扱う
     }
     if(!dai)dai=1;
     const sl=slots.filter(s=>pos(s.page,s.y)>=pos(seg.from.page,seg.from.y)&&pos(s.page,s.y)<pos(seg.to.page,seg.to.y)).map(s=>s.n);
     items.push({year:meta.year,subj:meta.subj,dai,q:mk.kind==='dai'?1:mk.n,part:'',seg,slots:sl,lead:mk.kind==='dai'?null:leads[dai]||null,useLead:true,on:true,ans:''});
   });
-  return {doc,pages,meta,items,file:file.name};
+  return {doc,pages,meta,items,file:file.name,scan};
 }
 // 正解のPDFを解析：行の中で「解答番号 → 正解」の並びを拾う（解答番号は1から順に増える）
-export async function parseAnswerPdf(file){
-  const lib=await pdfjs();
-  const buf=await file.arrayBuffer();
-  const doc=await lib.getDocument({data:new Uint8Array(buf),cMapUrl:new URL('../vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true}).promise;
+// pre：parseProblemPdf で読んだ結果（同じファイルをもう一度読まない・スキャンなら読み取り済みの文字を使う）
+export async function parseAnswerPdf(file,onProg,pre){
+  let PG;
+  if(pre&&pre.pages)PG=pre.pages;
+  else{
+    const lib=await pdfjs();
+    const buf=await file.arrayBuffer();
+    const doc=await lib.getDocument({data:new Uint8Array(buf),cMapUrl:new URL('../vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true}).promise;
+    PG=[];for(let i=1;i<=doc.numPages;i++){const p=await doc.getPage(i);PG.push(Object.assign(await pageLines(p),{page:p,no:i}));}
+  }
+  if(isScan(PG))return readScanAnswers(PG,onProg,file?file.name:(pre&&pre.file)||'');
   let text='';
   // 1つのPDFに複数の科目（物理基礎・物理・化学基礎・化学…）の表が入っていることがあるので、
   // 解答番号が1に戻るたびに「区切り」を作り、すぐ上にある科目名をその区切りの科目にする
@@ -142,8 +185,8 @@ export async function parseAnswerPdf(file){
   const num=s=>{s=Z2H(s).trim();if(CIRC.includes(s))return String(CIRC.indexOf(s));return /^\d{1,2}$/.test(s)?s:null;};
   const cx=t=>t.x+t.w/2;
   const SUBJRE=/(物理|化学|生物|地学)(基礎)?/;
-  for(let i=1;i<=doc.numPages;i++){
-    const {lines}=await pageLines(await doc.getPage(i));
+  for(let i=1;i<=PG.length;i++){
+    const {lines}=PG[i-1];
     lines.forEach(l=>{text+=l.text+'\n';});
     const heads=[];for(const l of lines)for(const t of l.t){const m=t.s.replace(/\s/g,'').match(SUBJRE);if(m)heads.push({y:l.y,x:cx(t),name:m[0]});}
     const headFor=(y,x0,x1)=>{const h=heads.filter(h=>h.y<y&&h.x>x0-160&&h.x<x1+160).sort((p,q)=>q.y-p.y)[0];return h?h.name:null;};
@@ -184,7 +227,8 @@ export async function parseAnswerPdf(file){
   }
   secs.forEach(x=>{const m=x.name.match(SUBJRE);x.subj=m?(m[1]==='物理'?'phy':m[1]==='化学'?'chem':m[1]):null;x.base=!!(m&&m[2]);x.count=x.next-1;});
   const good=secs.filter(x=>x.count>=2);
-  return {meta:guessMeta(file.name,text.slice(0,600)),secs:good,map:(good[0]||{map:{}}).map,count:good.reduce((a,x)=>a+x.count,0),file:file.name};
+  const fname=file?file.name:(pre&&pre.file)||'';
+  return {meta:guessMeta(fname,text.slice(0,600)),secs:good,map:(good[0]||{map:{}}).map,count:good.reduce((a,x)=>a+x.count,0),file:fname};
 }
 // 問題のPDFに合う正解を選ぶ：年度と科目（「基礎」でない方）が合う区切り → 科目だけ合う → 1つしかなければそれ
 export function pickAnswers(P,answers){
@@ -196,7 +240,7 @@ export function pickAnswers(P,answers){
     if(sc.base)sc0-=2;
     // 解答番号の数が問題PDFで見つかった数と合えば、それらしい
     const need=Math.max(0,...P.items.flatMap(it=>it.slots));if(need&&sc.count===need)sc0+=3;
-    cand.push({sc:sc0,map:sc.map});
+    cand.push({sc:sc0,map:Object.assign(Object.create({__struct:sc.struct||null}),sc.map)});
   }
   cand.sort((a,b)=>b.sc-a.sc);
   return cand.length&&cand[0].sc>=0?cand[0].map:{};
@@ -204,12 +248,44 @@ export function pickAnswers(P,answers){
 // 解答番号の割り当てを2通り試し、正解表と数が合う方を使う
 // A：本文中に見つけた解答番号のとおり　B：問ごとに1つずつ順番に（本文の番号が読めないPDF向け）
 export function bestAssign(items,map){
+  // 正解表に「第何問・設問 → 解答番号」が読めていれば、それで割り当てる（いちばん確か）
+  const st=map&&map.__struct;
+  if(st&&st.length){
+    const by={};st.forEach(r=>{if(r.dai&&r.q)(by[r.dai+'-'+r.q]=by[r.dai+'-'+r.q]||[]).push(r.n);});
+    const hit=items.filter(it=>by[it.dai+'-'+it.q]).length;
+    if(hit>=items.length*0.6){
+      items.forEach(it=>{it.slots=(by[it.dai+'-'+it.q]||[]).slice();it.ans='';it.on=true;});
+      // 正解表の設問が問題の側より少ない大問は、表の読み違い（設問のまとめすぎ）の恐れがあるので出題しない
+      const qn={};st.forEach(r=>{if(r.dai&&r.q)(qn[r.dai]=qn[r.dai]||new Set()).add(r.q);});
+      const inP={};items.forEach(it=>{(inP[it.dai]=inP[it.dai]||new Set()).add(it.q);});
+      const bad=new Set(Object.keys(inP).filter(d=>!qn[d]||qn[d].size<inP[d].size).map(Number));
+      // 問題の側で見出しを読み落とした問があると、その直前の問の切り取りに次の問まで入ってしまうので、その問は出題しない
+      items.forEach((it,i)=>{
+        if(bad.has(it.dai)){it.slots=[];return;}
+        const nx=items[i+1],same=nx&&nx.dai===it.dai;
+        const lastQ=qn[it.dai]?Math.max(...qn[it.dai]):it.q;
+        if((same&&nx.q!==it.q+1)||(!same&&it.q<lastQ))it.slots=[];
+      });
+      // 同じ大問・問が二度出たら（目次などの読み違い）、後のものだけを使う
+      const seen=new Set();for(let i=items.length-1;i>=0;i--){const k=items[i].dai+'-'+items[i].q;if(seen.has(k))items[i].slots=[];seen.add(k);}
+      // 表に無い問（見出しの読み違いなど）は出題しない
+      attachAnswers(items.filter(it=>it.slots.length),map);items.filter(it=>!it.slots.length).forEach(it=>{it.on=false;});
+      return items;
+    }
+  }
   const count=Object.keys(map).length,orig=items.map(it=>it.slots.slice());
   const score=()=>{const mx=Math.max(0,...items.flatMap(it=>it.slots));return items.filter(it=>it.ans).length*2-Math.abs(mx-count)*3;};
   const run=reset=>{items.forEach((it,i)=>{it.slots=reset?[]:orig[i].slice();it.ans='';it.on=true;});attachAnswers(items,map);return score();};
   const a=run(false);if(!count)return items;
   const b=run(true);if(b>a)return items;
   run(false);return items;
+}
+// 問題と正解をまとめて合わせる：正解表に「第何問・設問」があればそれを使い、無ければ切り取りを自動で手直ししてから割り当てる
+export function assignAll(P,answers){
+  const map=pickAnswers(P,answers);
+  if(!(map.__struct&&map.__struct.length))P.items=autoFix(P.items);
+  bestAssign(P.items,map);
+  return P.items;
 }
 // 自動の手直し：解答番号が1つも入っていない区間は前の問の続き（図や選択肢）とみなしてつなぐ
 export function autoFix(items){
@@ -222,6 +298,24 @@ export function autoFix(items){
     out.push(it);
   }
   return out;
+}
+// スキャンした正解表：罫線でマスに分けて読む（ocr.js の readTable）
+async function readScanAnswers(PG,onProg,fname){
+  const O=await import('./ocr.js');const secs=[];let text='';
+  for(const p of PG){
+    if(onProg)onProg(`${fname}：正解の表を読み取り中… ${p.no} / ${PG.length}ページ`);
+    const vp=p.page.getViewport({scale:2}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
+    await p.page.render({canvasContext:g,viewport:vp}).promise;
+    const T=await O.readTable(c,2);if(!T||!T.rows.length)continue;
+    const head=T.head.join(' ');text+=head+'\n';
+    const m=head.replace(/\s/g,'').match(/(物理|化学|生物|地学)(基礎)?/);
+    const map={},struct=[];
+    T.rows.forEach(r=>{if(r.ans)map[r.n]=r.ans;struct.push({n:r.n,dai:r.dai,q:r.q});});
+    secs.push({name:m?m[0]:'',subj:m?(m[1]==='物理'?'phy':m[1]==='化学'?'chem':m[1]):null,base:!!(m&&m[2]),map,struct,count:T.rows.length});
+  }
+  const meta=guessMeta(fname,text);
+  return {meta,secs,map:(secs[0]||{map:{}}).map,count:secs.reduce((a,x)=>a+x.count,0),file:fname};
 }
 // 解答番号の割り当てができていない問には、順番どおりに1つずつ割り当てる
 export function attachAnswers(items,map){

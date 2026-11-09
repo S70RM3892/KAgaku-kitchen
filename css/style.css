@@ -907,3 +907,9 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .rk.me{background:#fff6d6;outline:3px solid var(--hot)}
 .rk-gap{text-align:center;font-weight:800;color:#3c5560}
 .rk-per button{color:var(--ink);background:#fff;border:2px solid var(--ink);border-radius:10px;font-weight:800;padding:6px}.rk-per button.on{background:var(--ticket)}
+.kk-get{margin:8px 0;background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px 10px}
+.kk-get summary{font-weight:800;cursor:pointer}
+.kk-years{display:flex;flex-direction:column;gap:4px;max-height:40vh;overflow:auto;margin-top:6px}
+.kk-yr{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:13px;border-bottom:1px solid #12212922;padding:3px 0}
+.kk-yr b{width:3.2em;font-family:var(--font-display)}
+.kk-yr a{font-weight:800;color:var(--hot)}
