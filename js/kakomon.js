@@ -78,6 +78,9 @@ function guessMeta(name,text){
   const s=Z2H(name+' '+text);
   let year=null;
   const m1=s.match(/(19[89]\d|20[0-4]\d)/);if(m1)year=+m1[1];
+  // ファイル名の「r6」「R05」「h30」などの略記（令和・平成）
+  const fn=Z2H(name).match(/(?:^|[^a-z])([rh])0?(\d{1,2})(?!\d)/i);
+  if(!year&&fn)year=(fn[1].toLowerCase()==='r'?2018:1988)+ +fn[2];
   const m2=s.match(/令和\s*(\d+|元)\s*年/);if(!year&&m2)year=2018+(m2[1]==='元'?1:+m2[1]);
   const m3=s.match(/平成\s*(\d+)\s*年/);if(!year&&m3)year=1988+ +m3[1];
   const subj=/化学/.test(s)?'chem':/物理/.test(s)?'phy':'phy';
@@ -130,38 +133,85 @@ export async function parseAnswerPdf(file){
   const lib=await pdfjs();
   const buf=await file.arrayBuffer();
   const doc=await lib.getDocument({data:new Uint8Array(buf),cMapUrl:new URL('../vendor/pdfjs/cmaps/',import.meta.url).href,cMapPacked:true}).promise;
-  let text='';const map={};let next=1;
+  let text='';
+  // 1つのPDFに複数の科目（物理基礎・物理・化学基礎・化学…）の表が入っていることがあるので、
+  // 解答番号が1に戻るたびに「区切り」を作り、すぐ上にある科目名をその区切りの科目にする
+  const secs=[];let cur=null,lastHead=null;
+  const startSec=head=>{cur={name:head||(cur&&cur.name)||'',map:{},next:1};secs.push(cur);};
+  const put=(a,v)=>{if(!cur||(+a===1&&cur.next>1))startSec(null);if(+a!==cur.next)return false;cur.map[a]=v;cur.next++;return true;};
   const num=s=>{s=Z2H(s).trim();if(CIRC.includes(s))return String(CIRC.indexOf(s));return /^\d{1,2}$/.test(s)?s:null;};
   const cx=t=>t.x+t.w/2;
+  const SUBJRE=/(物理|化学|生物|地学)(基礎)?/;
   for(let i=1;i<=doc.numPages;i++){
     const {lines}=await pageLines(await doc.getPage(i));
     lines.forEach(l=>{text+=l.text+'\n';});
+    const heads=[];for(const l of lines)for(const t of l.t){const m=t.s.replace(/\s/g,'').match(SUBJRE);if(m)heads.push({y:l.y,x:cx(t),name:m[0]});}
+    const headFor=(y,x0,x1)=>{const h=heads.filter(h=>h.y<y&&h.x>x0-160&&h.x<x1+160).sort((p,q)=>q.y-p.y)[0];return h?h.name:null;};
     // 表の見出し「解答番号」「正解」の列の位置（横に表が並んでいれば複数組）を探し、列ごとに読む
     const hA=[],hB=[];let hy=-1;
     // 見出しが1つの文字列にまとまっていることもあるので、文字の位置から列の中心を見積もる
     const at=(t,i,n)=>t.x+t.w*(i+n/2)/Math.max(1,t.s.length);
     for(const l of lines)for(const t of l.t){
-      const ia=t.s.search(/解\s*答/);if(ia>=0){const m=t.s.slice(ia).match(/^解\s*答\s*(番\s*号)?/)[0];hA.push(at(t,ia,m.length));hy=Math.max(hy,l.y);}
+      const ia=t.s.search(/解\s*答/);if(ia>=0){const m=t.s.slice(ia).match(/^解\s*答\s*(番\s*号)?/)[0];hA.push({x:at(t,ia,m.length),y:l.y});hy=Math.max(hy,l.y);}
       const re=/正\s*解|^\s*正\s*$/g;let m;while((m=re.exec(t.s))){if(/解答/.test(t.s.slice(Math.max(0,m.index-1),m.index+3)))continue;
-        if(/正解(と|及び|および)/.test(t.s.slice(m.index,m.index+5)))continue;hB.push(at(t,m.index,m[0].length));hy=Math.max(hy,l.y);}
+        if(/正解(と|及び|および)/.test(t.s.slice(m.index,m.index+5)))continue;hB.push({x:at(t,m.index,m[0].length),y:l.y});hy=Math.max(hy,l.y);}
     }
-    const cols=hA.sort((a,b)=>a-b).map(a=>{const b=hB.filter(x=>x>a).sort((x,y)=>x-y)[0];return b?{a,b}:null;}).filter(Boolean);
+    // 同じ列が縦に何度も出てくる（科目ごとの表）こともあるので、x の近い見出しは1つにまとめる
+    const uniq=arr=>arr.sort((p,q)=>p.x-q.x).filter((h,j,A)=>!j||h.x-A[j-1].x>12);
+    const cols=uniq(hA.slice()).map(a=>{const b=uniq(hB.slice()).filter(x=>x.x>a.x)[0];return b?{a:a.x,b:b.x}:null;}).filter(Boolean);
+    const hTop=Math.min(...hA.map(h=>h.y),Infinity);
     if(cols.length){
       const tol=c=>Math.max(14,(c.b-c.a)*0.6);
-      for(const c of cols)for(const l of lines){if(l.y<=hy)continue;
+      for(const c of cols)for(const l of lines){if(l.y<=hTop)continue;
         const near=x=>l.t.map(t=>({t,v:num(t.s),d:Math.abs(cx(t)-x)})).filter(o=>o.v!==null&&o.d<tol(c)).sort((p,q)=>p.d-q.d)[0];
         const A=near(c.a),B=near(c.b);
-        if(A&&B&&A.t!==B.t&&+A.v===next&&/^\d$/.test(B.v)){map[next]=B.v;next++;}
+        if(!(A&&B&&A.t!==B.t&&/^\d$/.test(B.v)))continue;
+        if(+A.v===1){startSec(headFor(l.y,c.a,c.b));}
+        put(A.v,B.v);
       }
       continue;
     }
     // 見出しが読めないとき：行の中で「解答番号 → 正解」の並びを拾う
     for(const l of lines){
+      const h=l.text.replace(/\s/g,'').match(SUBJRE);if(h)lastHead=h[0];
       const nums=l.t.flatMap(t=>Z2H(t.s).trim().split(/\s+/)).map(num).filter(v=>v!==null);
-      for(let j=0;j<nums.length-1;j++){if(+nums[j]===next&&/^\d$/.test(nums[j+1])){map[next]=nums[j+1];next++;j++;}}
+      for(let j=0;j<nums.length-1;j++){
+        const want=cur?cur.next:1;
+        if(+nums[j]===1&&/^\d$/.test(nums[j+1])&&(!cur||cur.next>2)){startSec(lastHead);put(nums[j],nums[j+1]);j++;continue;}
+        if(+nums[j]===want&&/^\d$/.test(nums[j+1])){put(nums[j],nums[j+1]);j++;}
+      }
     }
   }
-  return {meta:guessMeta(file.name,text.slice(0,600)),map,count:next-1,file:file.name};
+  secs.forEach(x=>{const m=x.name.match(SUBJRE);x.subj=m?(m[1]==='物理'?'phy':m[1]==='化学'?'chem':m[1]):null;x.base=!!(m&&m[2]);x.count=x.next-1;});
+  const good=secs.filter(x=>x.count>=2);
+  return {meta:guessMeta(file.name,text.slice(0,600)),secs:good,map:(good[0]||{map:{}}).map,count:good.reduce((a,x)=>a+x.count,0),file:file.name};
+}
+// 問題のPDFに合う正解を選ぶ：年度と科目（「基礎」でない方）が合う区切り → 科目だけ合う → 1つしかなければそれ
+export function pickAnswers(P,answers){
+  const cand=[];
+  for(const A of answers)for(const sc of A.secs){
+    let sc0=0;
+    if(A.meta.year===P.meta.year)sc0+=4;
+    if(sc.subj===P.meta.subj)sc0+=3;else if(sc.subj)sc0-=5;
+    if(sc.base)sc0-=2;
+    // 解答番号の数が問題PDFで見つかった数と合えば、それらしい
+    const need=Math.max(0,...P.items.flatMap(it=>it.slots));if(need&&sc.count===need)sc0+=3;
+    cand.push({sc:sc0,map:sc.map});
+  }
+  cand.sort((a,b)=>b.sc-a.sc);
+  return cand.length&&cand[0].sc>=0?cand[0].map:{};
+}
+// 自動の手直し：解答番号が1つも入っていない区間は前の問の続き（図や選択肢）とみなしてつなぐ
+export function autoFix(items){
+  const any=items.some(it=>it.slots.length);
+  if(!any)return items;
+  const out=[];
+  for(const it of items){
+    const pv=out[out.length-1];
+    if(!it.slots.length&&pv&&pv.subj===it.subj&&pv.dai===it.dai){pv.seg={from:pv.seg.from,to:it.seg.to};continue;}
+    out.push(it);
+  }
+  return out;
 }
 // 解答番号の割り当てができていない問には、順番どおりに1つずつ割り当てる
 export function attachAnswers(items,map){
@@ -171,6 +221,7 @@ export function attachAnswers(items,map){
     n=Math.max(...it.slots)+1;
     const a=it.slots.map(s=>map[s]||'').join('');
     if(a.length===it.slots.length)it.ans=a;
+    if(!it.ans)it.on=false;
   }
 }
 // 区間を画像にする（ページをまたぐときは縦につなぐ）。adj は上端・下端の手直し（ポイント）

@@ -49,7 +49,15 @@ import('../js/kyote.js').then(({KPHY,KCHEM})=>{
     console.log(g,'ok',B.ALL.length,'questions');
   }
   return import('../js/kakomon.js');
-}).then(({KAKO})=>{
+}).then(({KAKO,autoFix,attachAnswers,pickAnswers})=>{
+  // 自動の手直し：解答番号の無い区間は前の問につなぐ／正解は年度・科目（基礎でない方）が合う表から選ぶ
+  const seg=(a,b)=>({from:{page:1,y:a},to:{page:1,y:b}});
+  const its=[{subj:'phy',dai:1,q:1,slots:[1],seg:seg(0,10)},{subj:'phy',dai:1,q:2,slots:[],seg:seg(10,20)},{subj:'phy',dai:1,q:3,slots:[2,3],seg:seg(20,30)}];
+  const fixed=autoFix(its);assert.equal(fixed.length,2);assert.deepEqual(fixed[0].seg,seg(0,20));
+  const P={meta:{year:2024,subj:'phy'},items:fixed};
+  const A=[{meta:{year:2024},secs:[{subj:'phy',base:true,count:3,map:{1:'9',2:'9',3:'9'}},{subj:'phy',base:false,count:3,map:{1:'3',2:'1',3:'4'}},{subj:'chem',base:false,count:3,map:{1:'2',2:'2',3:'2'}}]}];
+  attachAnswers(fixed,pickAnswers(P,A));assert.deepEqual(fixed.map(x=>x.ans),['3','14']);
+  const none=[{subj:'phy',dai:1,q:1,slots:[1],seg:seg(0,1)}];attachAnswers(none,{});assert.equal(none[0].on,false,'no answer -> not used');
   // 過去問早押し：端末に読み込んだ問題（ここでは架空の4問）。答えはマークの数字、解答番号2つの問は2桁
   const add=(k,subj,ans)=>{KAKO.Q[k]={k,n:k,cat:subj,subj,clues:Array(8).fill(''),ans,slots:ans.length};};
   add('2099-phy-1-1','phy','3');add('2099-phy-1-2','phy','52');add('2099-chem-1-1','chem','0');add('2099-chem-2-1','chem','4');

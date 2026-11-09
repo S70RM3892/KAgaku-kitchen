@@ -216,7 +216,7 @@ const HOWTO={
   kphy:`<b>共テ物理 早押し</b>：力学・熱・波動・電磁気・原子の<b>法則・現象・力・物理量</b>を、少しずつ出るヒントから当てる早押し（全84問・すべて自作）。ヒントは分野 → 特徴 → 式・数値の順にはっきりしていく。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：力学→熱と波動→電磁気→原子→共テ総合。`,
   kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（理論・高分子66問＋物質の早押し問題、すべて自作）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
   kako:`<b>過去問 早押し</b>：自分で用意した共テ・センターの物理・化学のPDF（問題と正解）を<b>この端末に読み込み</b>、1問ずつ切り取って早押しにする。問題は<b>上から少しずつ見えていく</b>ので、解けた瞬間に解答番号（①〜⑨・⓪）を押す。<br>
-      <b>問題と正解はこの端末のブラウザの中だけに保存</b>され、サーバーやGitHubには送られない（過去問には著作権があるため）。友達と遊ぶときは、各自が同じPDFを読み込む。切り取りや正解は読み込み後の画面で手直しできる。`,
+      <b>問題と正解はこの端末のブラウザの中だけに保存</b>され、サーバーやGitHubには送られない（過去問には著作権があるため）。友達と遊ぶときは、各自が同じPDFを読み込む。PDFを選ぶだけで、切り取り・正解の割り当て・保存まで自動で行う。`,
   quiz:`<b>早押しクイズ</b>：条件（ヒント）が少しずつ出るので、<b>どの物質か分かった瞬間に選択肢をタップ</b>。早いほど高得点、ただし間違えると早いほど大きく減点され、その問題にはもう答えられない（当てずっぽうは損）。<br>
       問題は組成・官能基・無機イオンモードの物質から165問。ヒントは「分類 → 反応・性質 → 化学式」の順にはっきりしていく。<br>
       <b>友達と遊ぶ</b>と全員で同じ問題を早押し（対戦は個人戦、協力はチームの合計点）。<b>段階を選べる</b>：気体と沈殿→無機→有機→沈殿と錯イオン→京大。`,
@@ -370,35 +370,57 @@ function kakoNeedOverlay(){overlay(`<h2>過去問がまだ無い</h2><p>共テ�
 const KKI={P:[],A:[],items:[]};      // 取り込み中のPDF・正解・問題
 function kakoImportDialog(){
   overlay(`<h2>過去問のPDFを読み込む</h2>
-    <p>大学入試センターの<b>問題PDFと正解PDF</b>（物理・化学、何年分でも）をまとめて選ぶ。年度と科目はファイル名や中身から推測し、あとで直せる。</p>
-    <label class="btn go kk-file">ファイルを選ぶ<input type="file" id="kkFiles" accept="application/pdf,.pdf" multiple hidden></label>
+    <p>大学入試センターの<b>問題PDFと正解PDF</b>（物理・化学、何年分でも）をまとめて選ぶ。年度・科目・どの正解がどの問題のものかは自動で判断する。</p>
+    <div class="row-btns"><label class="btn go kk-file">ファイルを選ぶ<input type="file" id="kkFiles" accept="application/pdf,.pdf" multiple hidden></label>
+    <label class="btn sub kk-file kk-dir">フォルダごと<input type="file" id="kkDir" webkitdirectory multiple hidden></label></div>
+    <p class="note">選ぶだけで、切り取り・正解の割り当て・保存まで全部自動で行う。</p>
     <p class="note" id="kkMsg">読み込みはこの端末の中だけで行う。</p>
     <div class="row-btns"><button class="btn sub" data-ov="close">やめる</button></div>`,'kakoimp');
   $('kkFiles').addEventListener('change',e=>kakoReadFiles([...e.target.files]));
+  const dir=$('kkDir');if(!('webkitdirectory' in dir))dir.parentElement.remove();else dir.addEventListener('change',e=>kakoReadFiles([...e.target.files]));
 }
 async function kakoReadFiles(files){
   const msg=$('kkMsg');
-  KKI.P=[];KKI.A=[];KKI.items=[];
+  files=files.filter(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+  KKI.P=[];KKI.A=[];KKI.items=[];KKI.drop=[];
   try{
     for(const [i,f] of files.entries()){
       if(msg)msg.textContent=`読み込み中… ${i+1} / ${files.length}：${f.name}`;
       const P=await KK.parseProblemPdf(f);
-      if(P.meta.isAns||!P.items.length){const A=await KK.parseAnswerPdf(f);KKI.A.push(A);}else KKI.P.push(P);
+      if(P.meta.isAns||!P.items.length){const A=await KK.parseAnswerPdf(f);if(A.count)KKI.A.push(A);}else KKI.P.push(P);
     }
     for(const P of KKI.P){
-      const A=KKI.A.find(a=>a.meta.year===P.meta.year&&a.meta.subj===P.meta.subj)||(KKI.A.length===1&&KKI.P.length===1?KKI.A[0]:null);
-      KK.attachAnswers(P.items,A?A.map:{});
+      P.items=KK.autoFix(P.items);
+      KK.attachAnswers(P.items,KK.pickAnswers(P,KKI.A));
       P.items.forEach(it=>{it.P=P;it.adj={top:0,bottom:0};KKI.items.push(it);});
     }
-    if(msg)msg.textContent='切り取り中…';
+    // 同じ年度・科目・大問・問が重なったら枝番を付けて分ける
+    const seen={};KKI.items.forEach(it=>{const k=KK.itemId(it);if(seen[k]){it.part=String(++seen[k]);}else seen[k]=1;});
     for(const [i,it] of KKI.items.entries()){
-      if(msg&&i%5===0)msg.textContent=`切り取り中… ${i+1} / ${KKI.items.length}`;
+      if(msg&&i%3===0)msg.textContent=`切り取り中… ${i+1} / ${KKI.items.length}`;
       it.img=await KK.renderSeg(it.P,it.seg,it.adj);
       it.leadImg=it.lead?await KK.renderSeg(it.P,it.lead):null;
     }
   }catch(err){if(msg)msg.textContent='読み込めなかった：'+(err&&err.message||err);return;}
   if(!KKI.items.length){if(msg)msg.textContent=`問題が見つからなかった（正解PDF ${KKI.A.length}件）。問題PDFも選ぶ`;return;}
-  kakoEditor();
+  // そのまま自動で保存する（手直しはあとから「読み込んだ過去問」でできる）
+  const recs=await kakoSave();
+  const by={};recs.forEach(r=>{const k=r.year+' '+KK.subjName(r.subj);by[k]=by[k]||{n:0,ok:0};by[k].n++;if(r.on&&r.ans)by[k].ok++;});
+  const ng=recs.filter(r=>!r.ans).length;
+  overlay(`<h2>読み込み完了</h2><p>自動で切り取り・正解の割り当て・保存まで終えた。</p>
+    <div class="kk-sum">${Object.entries(by).sort().map(([k,v])=>`<div><b>${esc(k)}</b>　${v.ok}問${v.ok<v.n?`<small>（正解が読めず出題しない ${v.n-v.ok}問）</small>`:''}</div>`).join('')}</div>
+    ${ng?`<p class="note">正解PDFも一緒に選ぶと、正解が読めなかった問も出題できる。</p>`:''}
+    <div class="row-btns"><button class="btn go" data-ov="close">遊ぶ</button><button class="btn sub" data-kk="review">切り取りを確認・手直し</button></div>`,'kakodone');
+}
+// 取り込み中の問題を端末に保存する（手直しで年度や番号を変えたときは、前のIDのものを消してから入れ直す）
+async function kakoSave(){
+  const old=KKI.items.map(it=>it.savedId).concat(KKI.drop||[]).filter(Boolean);KKI.drop=[];
+  const recs=KKI.items.map(it=>{const r={year:it.year,subj:it.subj,dai:it.dai,q:it.q,part:it.part||'',ans:it.ans||'',img:it.img,lead:it.leadImg||null,useLead:!!it.useLead,on:!!it.on&&!!it.ans};r.id=KK.itemId(r);return r;});
+  if(old.length){const ids=new Set(recs.map(r=>r.id));KKSAVED=await KK.deleteWhere(it=>old.includes(it.id)&&!ids.has(it.id));}
+  KKSAVED=await KK.saveItems(recs);
+  KKI.items.forEach((it,i)=>{it.savedId=recs[i].id;});
+  renderTitle();if(SES&&SES.role==='client')SES.net.send({t:'w',w:allWeights(),kk:KK.KAKO.ALL});
+  return recs;
 }
 const urlOf=b=>{if(!b)return '';b._u=b._u||URL.createObjectURL(b);return b._u;};
 function kakoEditor(){
@@ -432,18 +454,17 @@ $('ov').addEventListener('click',async e=>{
   const b=e.target.closest('[data-kk],[data-a]');if(!b)return;
   if(b.dataset.kk==='import'){kakoImportDialog();return;}
   if(b.dataset.kk==='manage'){kakoManage();return;}
+  if(b.dataset.kk==='review'){kakoEditor();return;}
   if(b.dataset.kk==='save'){
-    const recs=KKI.items.map(it=>{const r={year:it.year,subj:it.subj,dai:it.dai,q:it.q,part:it.part||'',ans:it.ans||'',img:it.img,lead:it.leadImg||null,useLead:!!it.useLead,on:!!it.on};r.id=KK.itemId(r);return r;});
-    KKSAVED=await KK.saveItems(recs);KKI.items=[];
+    const recs=await kakoSave();
     overlay(`<h2>保存した</h2><p>この端末に ${recs.length} 問を保存した（正解が入っている ${recs.filter(r=>r.on&&r.ans).length} 問が出題される）。</p><button class="btn go" data-ov="close">閉じる</button>`);
-    renderTitle();if(SES&&SES.role==='client')SES.net.send({t:'w',w:allWeights(),kk:KK.KAKO.ALL});
     return;
   }
   if(b.dataset.kk==='del'){const k=b.dataset.k;KKSAVED=await KK.deleteWhere(it=>(it.year+'-'+it.subj)===k);kakoManage();renderTitle();return;}
   if(b.dataset.a&&OVK==='kakoedit'){
     const row=b.closest('.kk-row'),i=+row.dataset.i,it=KKI.items[i];if(!it)return;
     const a=b.dataset.a,st=16;
-    if(a==='merge'){const pv=KKI.items[i-1];pv.seg={from:pv.seg.from,to:it.seg.to};pv.slots=pv.slots.concat(it.slots);pv.ans=(pv.ans||'')+(it.ans||'');pv.img=await KK.renderSeg(pv.P,pv.seg,pv.adj);KKI.items.splice(i,1);kakoEditor();return;}
+    if(a==='merge'){const pv=KKI.items[i-1];pv.seg={from:pv.seg.from,to:it.seg.to};pv.slots=pv.slots.concat(it.slots);pv.ans=(pv.ans||'')+(it.ans||'');pv.img=await KK.renderSeg(pv.P,pv.seg,pv.adj);if(it.savedId)(KKI.drop=KKI.drop||[]).push(it.savedId);KKI.items.splice(i,1);kakoEditor();return;}
     if(a==='t-')it.adj.top-=st;if(a==='t+')it.adj.top+=st;if(a==='b-')it.adj.bottom-=st;if(a==='b+')it.adj.bottom+=st;
     it.img=await KK.renderSeg(it.P,it.seg,it.adj);
     const im=row.querySelector('.kk-img img:last-child');if(im)im.src=urlOf(it.img);

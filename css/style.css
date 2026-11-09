@@ -895,3 +895,4 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 :where(body.ui-land) #quizbox.kk>:not(.qz-head):not(.kk-view){grid-column:2}
 :where(body.ui-land) #quizbox.kk .kk-pad{grid-template-columns:repeat(4,1fr);align-self:end}
 :where(body.ui-land) #quizbox.kk .kk-pad{gap:4px}:where(body.ui-land) #quizbox.kk .kk-pad button{font-size:18px;padding:1px 0;border-width:2px;box-shadow:0 2px 0 var(--ink)}
+.kk-sum{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:14px}.kk-sum small{color:var(--hot);margin-left:4px}
