@@ -36,4 +36,17 @@ const P2=[{id:'p0',name:'A',slot:0},{id:'p1',name:'B',slot:1}];
   apply(S,'p0',{t:'ans',c:w[0]});apply(S,'p1',{t:'ans',c:w[1]});assert.equal(q.state,'done');assert.equal(q.by,null);
   for(let i=0;i<50;i++)tick(S,0.1);const q2=S.qz.q;apply(S,'p1',{t:'ans',c:q2.k});assert.ok(S.team.score>0);
 }
-console.log('QUIZ PASS');
+// 共テ物理・化学の早押し：同じ仕組みで動く。名前の重複なし・ヒント3つ以上・選択肢は正解を含む
+import('../js/kyote.js').then(({KPHY,KCHEM})=>{
+  for(const [g,B] of [['kphy',KPHY],['kchem',KCHEM]]){
+    assert.equal(new Set(B.ALL.map(k=>B.Q[k].n)).size,B.ALL.length,g+' unique names');
+    for(const k of B.ALL){assert.ok(B.Q[k].clues.length>=3,k);const c=B.choices(k,6);assert.ok(c.includes(k)&&c.length===6);}
+    for(const st of [...B.STAGES.map(x=>x.id),'rv'])for(const mode of ['solo','coop','versus']){
+      const S=createGame({g,mode,stageId:st,players:mode==='solo'?[{id:'p0',name:'me'}]:P2});begin(S);assert.equal(S.g,g);
+      let guard=0;while(!S.over&&guard++<100000){const q=S.qz.q;if(q&&q.state==='open'&&Math.random()<0.02)apply(S,S.order[Math.floor(Math.random()*S.order.length)],{t:'ans',c:q.choices[Math.floor(Math.random()*q.choices.length)]});tick(S,0.1);}
+      assert.ok(S.over&&results(S).log.length===S.qz.total,`${g}/${st}/${mode}`);
+    }
+    console.log(g,'ok',B.ALL.length,'questions');
+  }
+  console.log('QUIZ PASS');
+});

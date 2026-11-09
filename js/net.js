@@ -1,7 +1,7 @@
 // 通信層：ホスト1人＋参加者最大3人のスター型。
 // 本番は PeerJS（WebRTC。シグナリングは PeerJS の無料クラウド、届かない回線では PeerJS の TURN 経由）。
 // ?net=local を付けると同じブラウザ内のタブ同士を BroadcastChannel でつなぐ（テスト用）。
-export const PROTO=8;
+export const PROTO=9;
 const PREFIX='kagaku-kitchen-v1-';
 const CODE_CH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export function newCode(){let s='';for(let i=0;i<4;i++)s+=CODE_CH[Math.floor(Math.random()*CODE_CH.length)];return s;}

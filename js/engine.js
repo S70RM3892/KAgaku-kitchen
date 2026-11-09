@@ -7,6 +7,7 @@ import * as O from './org.js';
 import * as I from './ion.js';
 import {ROOTM,SYNM,WORDM} from './eng.js';
 import * as QZ from './quiz.js';
+import {KPHY,KCHEM} from './kyote.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
 export const ROT_SEC=40;      // 協力：棚替えの間隔
 export const REQ_LIFE=15;     // 協力：リクエストの寿命
@@ -127,15 +128,20 @@ RULES.eroot=engRules(ROOTM,{life:20});
 RULES.esyn=engRules(SYNM,{life:24});
 RULES.eword=engRules(WORDM,{life:14});
 // 早押しクイズ：注文と鍋は使わず、1問ずつヒントが出て、選択肢を早く正しく選んだ人が得点
-RULES.quiz={stages:QZ.STAGES,review:QZ.REVIEW,cells:[],col:{},
-  pool:st=>st.pool==='review'?QZ.ALL.slice():st.pool.slice(),valid:()=>false,known:QZ.known,
-  tgt:k=>({n:QZ.Q[k].n,f:'',proc:null,group:k}),nclue:()=>1,base:()=>10,life:()=>30,power:()=>0,
-  lockPool:()=>[],lockSkip:[],lockFill:()=>[],maxCoef:1,maxSpecies:1,label:k=>k,dark:'',rot:''};
+// 問題の束：物質の早押し（quiz）と、共テ物理（kphy）・共テ化学（kchem）。仕組みは同じ
+export const QBANK={quiz:QZ,kphy:KPHY,kchem:KCHEM};
+export const isQuiz=g=>has(QBANK,g);
+const QB=S=>QBANK[S.g];
+const quizRules=B=>({stages:B.STAGES,review:B.REVIEW,cells:[],col:{},
+  pool:st=>st.pool==='review'?B.ALL.slice():st.pool.slice(),valid:()=>false,known:B.known,
+  tgt:k=>({n:B.Q[k].n,f:'',proc:null,group:k}),nclue:()=>1,base:()=>10,life:()=>30,power:()=>0,
+  lockPool:()=>[],lockSkip:[],lockFill:()=>[],maxCoef:1,maxSpecies:1,label:k=>k,dark:'',rot:''});
+for(const g in QBANK)RULES[g]=quizRules(QBANK[g]);
 export const QUIZ_WAIT=3.5;   // 正解発表のあと次の問題までの秒数
 export const QUIZ_TAIL=6;     // 最後のヒントのあと答えられる秒数
 export const quizGain=q=>10+6*(q.clues.length-q.shown);       // 早く答えるほど高い
 export const quizLoss=q=>3+2*(q.clues.length-q.shown);        // 早く間違えるほど痛い（当てずっぽうは損）
-export const GAMES={quiz:'早押しクイズ',rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
+export const GAMES={quiz:'早押しクイズ',kphy:'共テ物理 早押し',kchem:'共テ化学 早押し',rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
 // 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
 export const BUSY=[null,
   {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},
@@ -202,7 +208,7 @@ export function createGame(cfg){
     w:cfg.weights||{},rv:st.pool==='review'
   };
   if(!S.pool.length)S.pool=R.pool(R.stages[0]);
-  if(g==='quiz'){
+  if(isQuiz(g)){
     S.split=false;S.max=0;S.qz={n:0,total:st.qn||10,reveal:st.reveal||4,nch:st.nch||4,q:null,done:false,used:[]};
     // 時間ではなく問題数で終わる（時間は、全問だれも答えなかったときの上限）
     S.t=S.total=S.qz.total*(7*S.qz.reveal+10);
@@ -215,7 +221,7 @@ export function createGame(cfg){
   return S;
 }
 
-export function begin(S){S.running=true;if(S.g==='quiz'){nextQuiz(S);return;}spawnOrder(S);spawnOrder(S);}
+export function begin(S){S.running=true;if(isQuiz(S.g)){nextQuiz(S);return;}spawnOrder(S);spawnOrder(S);}
 
 function emit(S,to,e){S.ev.push(Object.assign({to},e));}
 // 鍋に関わる人へ（共有鍋なら全員、対戦なら持ち主）
@@ -253,7 +259,7 @@ function removeOrder(S,o){const i=S.orders.indexOf(o);if(i>=0)S.orders.splice(i,
 /* ---------- 時間経過（ホストのみ） ---------- */
 export function tick(S,dt){
   if(!S.running||S.paused||S.over)return;
-  if(S.g==='quiz'){
+  if(isQuiz(S.g)){
     S.t-=dt;S.elapsed+=dt;tickQuiz(S,dt);
     if(S.t<=0||S.qz.done){S.t=Math.max(0,S.t);S.running=false;S.over=true;}
     return;
@@ -448,12 +454,12 @@ function nextQuiz(S){
   let r=Math.random()*ws.reduce((a,b)=>a+b,0),k=cand[cand.length-1];
   for(let i=0;i<cand.length;i++){r-=ws[i];if(r<=0){k=cand[i];break;}}
   Z.used.push(k);Z.n++;
-  Z.q={id:++S.uid,k,no:Z.n,clues:QZ.Q[k].clues,shown:1,t:0,state:'open',choices:QZ.choices(k,Z.nch),locked:{},by:null,wait:0};
+  Z.q={id:++S.uid,k,no:Z.n,clues:QB(S).Q[k].clues,shown:1,t:0,state:'open',choices:QB(S).choices(k,Z.nch),locked:{},by:null,wait:0};
   emit(S,'*',{s:'pop',m:[k,'seen']});
 }
 function endQuiz(S,by){
   const Z=S.qz,q=Z.q;q.state='done';q.by=by;q.wait=QUIZ_WAIT;
-  if(!by){S.log.push({k:q.k,ok:false,why:'正解者なし',by:null,mode:'name',ci:0});emit(S,'*',{h:`正解は ${QZ.Q[q.k].n}`,k:'ng',s:'expire'});}
+  if(!by){S.log.push({k:q.k,ok:false,why:'正解者なし',by:null,mode:'name',ci:0});emit(S,'*',{h:`正解は ${QB(S).Q[q.k].n}`,k:'ng',s:'expire'});}
 }
 function tickQuiz(S,dt){
   const Z=S.qz,q=Z.q;if(!q)return;
@@ -465,7 +471,7 @@ function tickQuiz(S,dt){
 }
 function answerQuiz(S,pid,P,c){
   const q=S.qz&&S.qz.q;if(!q||q.state!=='open'||q.locked[pid]||!q.choices.includes(c))return;
-  const vs=S.mode==='versus',nm=QZ.Q[q.k].n;
+  const vs=S.mode==='versus',nm=QB(S).Q[q.k].n;
   if(c===q.k){
     const pts=Math.round(quizGain(q)*(S.bpts??1));
     P.score+=pts;P.pts+=pts;P.served++;P.combo++;P.maxCombo=Math.max(P.maxCombo,P.combo);
@@ -479,7 +485,7 @@ function answerQuiz(S,pid,P,c){
   const pen=quizLoss(q);q.locked[pid]=c;
   P.score=Math.max(0,P.score-pen);P.failed++;P.combo=0;
   if(!vs){S.team.score=Math.max(0,S.team.score-pen);S.team.failed++;S.team.combo=0;}
-  emit(S,pid,{h:`ちがう −${pen}<small>${QZ.Q[c].n} ではない</small>`,k:'ng',s:'ng',m:[q.k,'ng']});
+  emit(S,pid,{h:`ちがう −${pen}<small>${QB(S).Q[c].n} ではない</small>`,k:'ng',s:'ng',m:[q.k,'ng']});
   if(S.order.filter(x=>!S.players[x].left).every(x=>q.locked[x]))endQuiz(S,null);
 }
 
@@ -619,7 +625,7 @@ const ACT={
     else if(o.hints<2){o.hints++;P.hints++;}
   },
   focus(S,pid,P,a){if(orderById(S,a.o))P.focus=a.o;},
-  ans(S,pid,P,a){if(S.g==='quiz'&&typeof a.c==='string')answerQuiz(S,pid,P,a.c);},
+  ans(S,pid,P,a){if(isQuiz(S.g)&&typeof a.c==='string')answerQuiz(S,pid,P,a.c);},
 };
 
 export function apply(S,pid,a){

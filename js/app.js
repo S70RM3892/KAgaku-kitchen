@@ -13,7 +13,7 @@ const {COLORS,STAMPS}=E;
 // モードごとに習熟度・ベストを分けて持つ。rx=反応式モード、atom=組成モード（旧版 v1 の記録を引き継ぐ）、org=官能基モード
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
-let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -26,10 +26,11 @@ try{
     if(o.vs&&!(SAVE.vs.win+SAVE.vs.lose+SAVE.vs.draw))SAVE.vs=o.vs;
   }
 }catch(e){}
-const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword'];
+const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem'];
 // 科目：化学（4モード）と英語（3モード）
-const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz'];
-const subjOf=g=>ENG.includes(g)?'eng':'chem';
+const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz'],KYO=['kphy','kchem'];
+const SUBJ={chem:CHEM,eng:ENG,kyo:KYO};
+const subjOf=g=>ENG.includes(g)?'eng':KYO.includes(g)?'kyo':'chem';
 for(const g of GS){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
 if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(!GS.includes(SAVE.g))SAVE.g='rx';
@@ -38,13 +39,13 @@ SAVE.busy=Math.min(5,Math.max(1,(SAVE.busy|0)||2));
 const UI_DEF={auto:true,orient:'auto',names:false,colors:true,fs:'m',layout:'split',repeat:true,adv:true,bgm:true,vib:true};
 SAVE.ui=Object.assign({},UI_DEF,SAVE.ui||{});
 if((SAVE.uiv|0)<2){SAVE.ui.auto=true;SAVE.uiv=2;}
-function persist(){if(ENG.includes(SAVE.g))SAVE.lastEng=SAVE.g;else SAVE.lastChem=SAVE.g;try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
+function persist(){SAVE.lastBy=SAVE.lastBy||{};SAVE.lastBy[subjOf(SAVE.g)]=SAVE.g;try{localStorage.setItem(SAVE_KEY,JSON.stringify(SAVE));}catch(e){}}
 let persistT=0;function persistSoon(){clearTimeout(persistT);persistT=setTimeout(persist,300);}
 const GK=g=>GS.includes(g)?g:'rx';
 const SV=g=>SAVE[GK(g)];
-const knownKey=(g,k)=>g==='quiz'?QZ.known(k):g==='atom'?!!A.BYID[k]:isParts(g)?PM[g].M.known(k):!!MENU[k];
+const knownKey=(g,k)=>E.isQuiz(g)?E.QBANK[g].known(k):g==='atom'?!!A.BYID[k]:isParts(g)?PM[g].M.known(k):!!MENU[k];
 // モードごとの呼び名
-const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題'};
+const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題'};
 // 部品で組むモード（官能基・無機イオン）の画面まわり：棚の並び・伝票の種類・ヒント・表示
 const PM={
   org:{M:O,unit:'部品',cap:'骨格・官能基：タップで選んだ客の鍋へ',stackCols:6,
@@ -192,7 +193,7 @@ function starsFor(st,score){if(!st.stars)return 0;return st.stars.filter(t=>scor
 const busyKey=(id,b)=>(b|0)===2||!b?id:`${id}@${b}`;
 const scaledStars=(st,b)=>st.stars?st.stars.map(x=>Math.round(x*E.busyOf(b).star/10)*10):null;
 function unlocked(i,g=SAVE.g){
-  if(i===0||isParts(g)||g==='quiz')return true;const p=stagesOf(g)[i-1];
+  if(i===0||isParts(g)||E.isQuiz(g))return true;const p=stagesOf(g)[i-1];
   for(let b=1;b<=5;b++)if(starsFor({stars:scaledStars(p,b)},SV(g).best[busyKey(p.id,b)]||0)>=1)return true;
   return false;
 }
@@ -210,6 +211,8 @@ const HOWTO={
   org:`<b>官能基モード</b>：骨格（CH₃–・C₆H₅–・o-C₆H₄ など）と官能基（–OH・–CHO・–COOH など）の<b>部品を組んで有機化合物を作る</b>。「見分け」の注文では、2つの化合物を区別できる<b>検出試薬</b>（銀鏡・ヨードホルム・FeCl₃・NaHCO₃・さらし粉など）を1つ選ぶ。<br>
       <b>段階を選べる</b>：基礎（官能基入門）→基礎＋（検出反応）→標準（芳香族）→応用（異性体・ひっかけ）→京大（全範囲・性質のみ）。最初から全部選べる。<br>
       <b>覚え方の仕組み</b>：間違えると「何ができたか」「各試薬で何が起きるか」がその場で出て、次からよく注文される。教科書や文献で扱いが割れる反応（ギ酸とフェーリング液など）は正解に使わない。`,
+  kphy:`<b>共テ物理 早押し</b>：力学・熱・波動・電磁気・原子の<b>法則・現象・力・物理量</b>を、少しずつ出るヒントから当てる早押し（全84問・すべて自作）。ヒントは分野 → 特徴 → 式・数値の順にはっきりしていく。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：力学→熱と波動→電磁気→原子→共テ総合。`,
+  kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（理論・高分子66問＋物質の早押し問題、すべて自作）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
   quiz:`<b>早押しクイズ</b>：条件（ヒント）が少しずつ出るので、<b>どの物質か分かった瞬間に選択肢をタップ</b>。早いほど高得点、ただし間違えると早いほど大きく減点され、その問題にはもう答えられない（当てずっぽうは損）。<br>
       問題は組成・官能基・無機イオンモードの物質から165問。ヒントは「分類 → 反応・性質 → 化学式」の順にはっきりしていく。<br>
       <b>友達と遊ぶ</b>と全員で同じ問題を早押し（対戦は個人戦、協力はチームの合計点）。<b>段階を選べる</b>：気体と沈殿→無機→有機→沈殿と錯イオン→京大。`,
@@ -223,7 +226,7 @@ const HOWTO={
 function renderTitle(){
   const g=SAVE.g,R=SV(g),ST=stagesOf(g),RV=reviewOf(g);
   $('titleGame').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
-  $('titleGame').dataset.subj=subjOf(g);$('titleSubj').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.subj===subjOf(g)));
+  $('titleGame').dataset.subj=subjOf(g);showModes($('titleGame'),g);$('titleSubj').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.subj===subjOf(g)));
   let h='';
   ST.forEach((st,i)=>{
     const best=R.best[busyKey(st.id,SAVE.busy)]||0,s=starsFor({stars:scaledStars(st,SAVE.busy)},best),lock=!unlocked(i,g);
@@ -241,13 +244,15 @@ function renderTitle(){
   $('btnMute').textContent='音: '+(SAVE.mute?'OFF':'ON');
   $('btnCoef').textContent='係数判定: '+(SAVE.coef?'ON':'OFF');
   $('btnCoef').style.display=g==='rx'?'':'none';
-  $('btnDex').textContent=UNIT[GK(g)]+'図鑑';$('btnDex').style.display=g==='quiz'?'none':'';
+  $('btnDex').textContent=UNIT[GK(g)]+'図鑑';$('btnDex').style.display=E.isQuiz(g)?'none':'';
   $('howto').innerHTML=HOWTO[GK(g)];
   if(document.activeElement!==$('inName'))$('inName').value=SAVE.name||'';
 }
 $('titleBusy').addEventListener('click',e=>{const b=e.target.closest('[data-b]');if(!b)return;SAVE.busy=+b.dataset.b;persist();sfx('tap');renderTitle();});
 // 科目を切り替えると、その科目で最後に選んだモードに戻る
-function pickSubj(sj){const last=sj==='eng'?SAVE.lastEng:SAVE.lastChem;return (sj==='eng'?ENG:CHEM).includes(last)?last:(sj==='eng'?'eroot':'rx');}
+function pickSubj(sj){const L=SUBJ[sj]||CHEM,last=(SAVE.lastBy||{})[sj]||(sj==='eng'?SAVE.lastEng:sj==='chem'?SAVE.lastChem:null);return L.includes(last)?last:L[0];}
+// 科目のボタンに合わせて、モードのボタンを出し分ける
+function showModes(box,g){box.querySelectorAll('[data-g]').forEach(b=>{b.style.display=subjOf(b.dataset.g)===subjOf(g)?'':'none';});}
 $('titleSubj').addEventListener('click',e=>{const b=e.target.closest('[data-subj]');if(!b)return;SAVE.g=pickSubj(b.dataset.subj);persist();sfx('tap');renderTitle();});
 $('lobSubj').addEventListener('click',e=>{const b=e.target.closest('[data-subj]');if(!b||!SES||SES.role!=='host')return;const g=pickSubj(b.dataset.subj);if(SES.cfg.g!==g){SES.cfg.g=g;SES.cfg.stageId='s1';SAVE.g=g;persist();}sfx('tap');lobbyChanged(true);});
 $('titleGame').addEventListener('click',e=>{const b=e.target.closest('[data-g]');if(!b)return;SAVE.g=GK(b.dataset.g);persist();sfx('tap');renderTitle();});
@@ -272,8 +277,8 @@ function tutorial(fromGame,g=SAVE.g){
   if(g==='org'){tutorialO(fromGame);return;}
   if(g==='ion'){tutorialI(fromGame);return;}
   if(ENG.includes(g)){tutorialE(fromGame,g);return;}
-  if(g==='quiz'){overlay(`<h2>遊び方（早押しクイズ）</h2><div class="tut">${[
-    '画面の上に<b>ヒント</b>が数秒ごとに1つずつ増える（分類 → 反応・性質 → 化学式の順に、だんだん答えに近づく）。',
+  if(E.isQuiz(g)){overlay(`<h2>遊び方（${E.GAMES[g]}）</h2><div class="tut">${[
+    '画面の上に<b>ヒント</b>が数秒ごとに1つずつ増え、だんだん答えに近づく（最後は式や化学式でほぼ答えになる）。',
     '分かったら下の<b>選択肢をタップ</b>。いちばん早く正解した人が得点。ヒントが少ないうちに当てるほど高得点。',
     '間違えると<b>減点</b>（早いほど大きい）で、<b>その問題にはもう答えられない</b>。全員が間違えるか、最後のヒントのあと時間切れで次の問題へ。',
     '全問終わったら結果。答えられなかった問題は、次からよく出る。'].map((t,i)=>`<div class="step"><span class="n">${i+1}</span><div>${t}</div></div>`).join('')}</div>
@@ -498,7 +503,7 @@ function startSolo(stageId,g=SAVE.g){
   const cfg={g,busy:SAVE.busy,auto:SAVE.ui.auto,mode:'solo',stageId,players:[{id:'p0',name:myName(),slot:0}],weights:myWeights(g),pool,coef:g==='rx'&&SAVE.coef};
   SES={role:'solo',me:'p0',cfg,S:E.createGame(cfg)};
   enterGame();
-  if(!(g==='atom'?SAVE.tutA:g==='org'?SAVE.tutO:g==='ion'?SAVE.tutI:ENG.includes(g)||g==='quiz'?SAVE['tut_'+g]:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
+  if(!(g==='atom'?SAVE.tutA:g==='org'?SAVE.tutO:g==='ion'?SAVE.tutI:ENG.includes(g)||E.isQuiz(g)?SAVE['tut_'+g]:SAVE.tut)&&stageId==='s1'){SES.waitTut=true;tutorial(true,g);}
   else countdown(beginLocal);
 }
 function beginLocal(){
@@ -865,15 +870,15 @@ function renderLobby(){
   $('lobCount').textContent=`${ps.length} / 4`;
   $('lobMode').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.mode===cfg.mode);b.disabled=!host;});
   $('lobGame').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.g===g);b.disabled=!host;});
-  $('lobRules').innerHTML=(g==='quiz'?RULES_Q:ENG.includes(g)?RULES_E(g):g==='atom'?RULES_A:g==='org'?RULES_O:g==='ion'?RULES_I:RULES)[cfg.mode]||'';
-  $('lobGame').dataset.subj=subjOf(g);$('lobSubj').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.subj===subjOf(g));b.disabled=!host;});
+  $('lobRules').innerHTML=(E.isQuiz(g)?RULES_Q:ENG.includes(g)?RULES_E(g):g==='atom'?RULES_A:g==='org'?RULES_O:g==='ion'?RULES_I:RULES)[cfg.mode]||'';
+  $('lobGame').dataset.subj=subjOf(g);showModes($('lobGame'),g);$('lobSubj').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.subj===subjOf(g));b.disabled=!host;});
   let sh='';
   [...stagesOf(g),{id:'rv',name:'苦手ミックス',desc:`全員の苦手な${UNIT[g]}（★2以下）を集中注文`}].forEach((st,i)=>{
     sh+=`<button class="lst${st.id===cfg.stageId?' on':''}" data-st="${st.id}" ${host?'':'disabled'}><b>${st.lvl?`<span class="lvl lv${i+1}">${esc(st.lvl)}</span>`:''}${esc(st.name)}</b><span>${esc(st.desc)}</span></button>`;
   });
   $('lobStages').innerHTML=sh;
   $('lobSplitRow').style.display=cfg.mode==='coop'&&g!=='quiz'?'':'none';
-  $('lobAuto').closest('label').style.display=g==='quiz'?'none':'';
+  $('lobAuto').closest('label').style.display=E.isQuiz(g)?'none':'';
   $('lobSplit').checked=cfg.split!==false;$('lobSplit').disabled=!host;
   renderBusy($('lobBusy'),cfg.busy||2,!host);
   $('lobAuto').checked=!!cfg.auto;$('lobAuto').disabled=!host;
@@ -925,8 +930,8 @@ function enterGame(){
   UI.sel=null;UI.sig={};UI.cards=new Map();$('orders').innerHTML='';UI.lastTick=-1;UI.pauseShown=false;UI.incSig='';
   $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.g,V.stageId).name+(V.busy&&V.busy!==2?`・${E.busyOf(V.busy).name}`:'');
   // 早押しクイズは棚と伝票を使わず、問題の画面を重ねる
-  document.body.classList.toggle('quiz-on',V.g==='quiz');UI.qsig='';$('quizbox').innerHTML='';
-  if(V.g==='quiz'){$('ptL').innerHTML='';$('ptR').innerHTML='';$('ptable').className='ptable';}else buildTable(V.g);
+  document.body.classList.toggle('quiz-on',E.isQuiz(V.g));UI.qsig='';$('quizbox').innerHTML='';
+  if(E.isQuiz(V.g)){$('ptL').innerHTML='';$('ptR').innerHTML='';$('ptable').className='ptable';}else buildTable(V.g);
   $('feed').innerHTML='';$('incoming').classList.remove('on');$('game').classList.remove('danger');
   $('mpbar').classList.toggle('on',V.mode!=='solo');
   closeStamps();
@@ -986,7 +991,7 @@ function render(V){
   if(V.paused&&!UI.pauseShown){UI.pauseShown=true;showPause(V);}
   else if(!V.paused&&UI.pauseShown){UI.pauseShown=false;if(OVK==='pause')closeOverlay();}
   renderHUD(V);
-  if(V.g==='quiz'){
+  if(E.isQuiz(V.g)){
     renderQuiz(V);
     if(V.mode!=='solo'){const sm=sigMP(V);if(sm!==UI.sig.m){UI.sig.m=sm;renderMP(V);}}
     const tEl=$('hudTime'),tt=V.qz?`${Math.max(1,V.qz.n)}/${V.qz.total}`:'';if(tEl.textContent!==tt)tEl.textContent=tt;tEl.classList.remove('low');
@@ -1004,7 +1009,7 @@ function render(V){
 // 早押しクイズの画面：ヒントの列・次のヒントまでのバー・選択肢・正解発表
 const clueHTML=c=>{const m=c.match(/^(分子式|示性式|化学式)：(.*)$/);return m?`${m[1]}：${fmt(esc(m[2]))}`:esc(c);};
 function renderQuiz(V){
-  const Z=V.qz,q=Z&&Z.q,box=$('quizbox');if(!q){if(box.innerHTML)box.innerHTML='';return;}
+  const Z=V.qz,q=Z&&Z.q,box=$('quizbox'),QB=E.QBANK[V.g];if(!q){if(box.innerHTML)box.innerHTML='';return;}
   const mine=q.locked[me()];
   const sig=[q.id,q.shown,q.state,q.by,JSON.stringify(q.locked)].join('|');
   if(UI.qsig!==sig){
@@ -1014,9 +1019,9 @@ function renderQuiz(V){
     const who=q.by?(q.by===me()?'あなた':esc(V.players[q.by].name)):'';
     box.innerHTML=`<div class="qz-head"><b>第${q.no}問</b><span>／${Z.total}</span><span class="qz-val">${q.state==='open'?(mine?'この問題はもう答えられない':`今答えると <b>+${E.quizGain(q)}</b>　まちがえると −${E.quizLoss(q)}`):''}</span></div>
       <ol class="qz-clues">${q.clues.slice(0,q.shown).map((c,i)=>`<li class="${i===q.shown-1&&q.state==='open'?'new':''}">${clueHTML(c)}</li>`).join('')}${q.state==='open'&&q.shown<q.clues.length?'<li class="next"><i data-qbar></i></li>':''}</ol>
-      ${q.state==='done'?`<div class="qz-res ${q.by?'ok':'ng'}">${q.by?`${who} が正解`:'正解者なし'}：<b>${esc(QZ.Q[q.k].n)}</b></div>`:''}
+      ${q.state==='done'?`<div class="qz-res ${q.by?'ok':'ng'}">${q.by?`${who} が正解`:'正解者なし'}：<b>${esc(QB.Q[q.k].n)}</b></div>`:''}
       <div class="qz-ch">${q.choices.map(c=>{const bad=Object.values(q.locked).includes(c);const cls=q.state==='done'?(c===q.k?'right':bad?'wrong':''):(mine===c?'wrong':'');
-        return `<button data-qc="${esc(c)}" class="${cls}" ${q.state!=='open'||mine?'disabled':''}>${esc(QZ.Q[c].n)}</button>`;}).join('')}</div>`;
+        return `<button data-qc="${esc(c)}" class="${cls}" ${q.state!=='open'||mine?'disabled':''}>${esc(QB.Q[c].n)}</button>`;}).join('')}</div>`;
   }
   const bar=box.querySelector('[data-qbar]');if(bar){const r=(q.t-(q.shown-1)*Z.reveal)/Z.reveal;bar.style.transform=`scaleX(${Math.max(0,Math.min(1,r))})`;}
 }
@@ -1530,7 +1535,7 @@ function sigMP(V){
   return V.order.map(p=>{const P=V.players[p];return [p,P.name,P.score,P.left?1:0,V.mode==='coop'?V.orders.findIndex(o=>o.id===(p===me()?UI.sel:P.focus)):''].join(':');}).join('|');
 }
 function renderMP(V){
-  const vs=V.mode==='versus'||V.g==='quiz';
+  const vs=V.mode==='versus'||E.isQuiz(V.g);
   $('mpWho').innerHTML=V.order.map(p=>{
     const P=V.players[p];const isMe=p===me();
     const si=V.mode==='coop'?V.orders.findIndex(o=>o.id===(isMe?UI.sel:P.focus)):-1;
@@ -1745,7 +1750,7 @@ $('ov').addEventListener('click',e=>{
   const a=b.dataset.ov;
   switch(a){
     case 'close':closeOverlay();break;
-    case 'tutgo':if(curG()==='atom')SAVE.tutA=true;else if(curG()==='org')SAVE.tutO=true;else if(curG()==='ion')SAVE.tutI=true;else if(ENG.includes(curG())||curG()==='quiz')SAVE['tut_'+curG()]=true;else SAVE.tut=true;persist();closeOverlay();if(SES&&SES.waitTut){SES.waitTut=false;countdown(beginLocal);}break;
+    case 'tutgo':if(curG()==='atom')SAVE.tutA=true;else if(curG()==='org')SAVE.tutO=true;else if(curG()==='ion')SAVE.tutI=true;else if(ENG.includes(curG())||E.isQuiz(curG()))SAVE['tut_'+curG()]=true;else SAVE.tut=true;persist();closeOverlay();if(SES&&SES.waitTut){SES.waitTut=false;countdown(beginLocal);}break;
     case 'resume':act({t:'resume'});closeOverlay();UI.pauseShown=false;break;
     case 'quit':
       closeOverlay();
@@ -1844,15 +1849,16 @@ function reviewHTMLO(r,mode){
 function reviewHTMLQ(r,mode){
   const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
   const ng=[],ok=[];
-  (r.log||[]).forEach(l=>{if(!QZ.known(l.k))return;(l.ok&&(mode!=='versus'||l.by===M)?ok:ng).push(l);});
+  const QB=E.QBANK[r.g];
+  (r.log||[]).forEach(l=>{if(!QB.known(l.k))return;(l.ok&&(mode!=='versus'||l.by===M)?ok:ng).push(l);});
   let h='';
-  if(ng.length)h+=`<div class="sec-h">要復習（次回よく出る）</div><div class="rev">`+ng.map(l=>`<div class="it"><b>${esc(QZ.Q[l.k].n)}</b>　<span class="why">${l.ok?`${esc(nm(l.by))} が正解`:'正解者なし'}</span><div class="note2">${QZ.Q[l.k].clues.map(clueHTML).join('／')}</div></div>`).join('')+'</div>';
-  if(ok.length)h+=`<div class="sec-h">正解した問題</div><div class="rev">`+ok.map(l=>`<div class="it ok"><b>${esc(QZ.Q[l.k].n)}</b>　ヒント${l.ci}つ目で${mode!=='solo'?`（${esc(nm(l.by))}）`:''}　<span style="color:#e0a100">${stars3(mst(l.k,'quiz').box)}</span></div>`).join('')+'</div>';
+  if(ng.length)h+=`<div class="sec-h">要復習（次回よく出る）</div><div class="rev">`+ng.map(l=>`<div class="it"><b>${esc(QB.Q[l.k].n)}</b>　<span class="why">${l.ok?`${esc(nm(l.by))} が正解`:'正解者なし'}</span><div class="note2">${QB.Q[l.k].clues.map(clueHTML).join('／')}</div></div>`).join('')+'</div>';
+  if(ok.length)h+=`<div class="sec-h">正解した問題</div><div class="rev">`+ok.map(l=>`<div class="it ok"><b>${esc(QB.Q[l.k].n)}</b>　ヒント${l.ci}つ目で${mode!=='solo'?`（${esc(nm(l.by))}）`:''}　<span style="color:#e0a100">${stars3(mst(l.k,r.g).box)}</span></div>`).join('')+'</div>';
   return h;
 }
 function reviewHTML(r,mode){
   if(r.g==='atom')return reviewHTMLA(r,mode);
-  if(r.g==='quiz')return reviewHTMLQ(r,mode);
+  if(E.isQuiz(r.g))return reviewHTMLQ(r,mode);
   if(isParts(r.g))return reviewHTMLO(r,mode);
   const M=me(),nm=id=>{const p=r.players.find(x=>x.id===id);return p?p.name:'?';};
   const ng=[],ok=[];const seen=new Set();
@@ -1892,11 +1898,11 @@ function soloResults(r){
   const prev=B[bk]||0;if(score>prev)B[bk]=score;persist();
   const idx=ST.indexOf(st);
   const canNext=idx>=0&&idx<ST.length-1&&unlocked(idx+1,g);
-  let h=`<h2>${score>=(stars?stars[0]:0)?(r.g==='quiz'?'終了！':'営業終了！'):(r.g==='quiz'?'終了…':'営業終了…')}</h2>
+  let h=`<h2>${score>=(stars?stars[0]:0)?(E.isQuiz(r.g)?'終了！':'営業終了！'):(E.isQuiz(r.g)?'終了…':'営業終了…')}</h2>
     ${starsRow(stars,score)}
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
     ${stars?`<div style="font-size:12px;font-weight:800">忙しさ「${E.busyOf(r.busy).name}」の★ ${stars.join(' / ')} 点　自己ベスト ${B[bk]||0}</div>`:`<div style="font-size:12px;font-weight:800">忙しさ「${E.busyOf(r.busy).name}」 自己ベスト ${B[bk]||0}</div>`}
-    <div class="stats"><div>${r.g==='quiz'?'正解':'提供'}<b>${r.team.served}</b></div><div>${r.g==='quiz'?'誤答':'失敗'}<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>`;
+    <div class="stats"><div>${E.isQuiz(r.g)?'正解':'提供'}<b>${r.team.served}</b></div><div>${E.isQuiz(r.g)?'誤答':'失敗'}<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>`;
   h+=nightNote()+reviewHTML(r,'solo');
   h+=`<div class="row-btns">${canNext?'<button class="btn go" data-ov="next">次のステージ</button>':''}<button class="btn" data-ov="retry">もう一回</button><button class="btn sub" data-ov="menu">メニュー</button></div>`;
   overlay(h,'result');
@@ -1914,10 +1920,10 @@ function coopResults(r){
     ${starsRow(r.stars,score)}
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
     ${r.stars?`<div style="font-size:12px;font-weight:800">${r.n}人・${E.busyOf(r.busy).name}の★ ${r.stars.join(' / ')} 点　チームベスト ${CB[key]||0}</div>`:''}
-    <div class="stats"><div>${r.g==='quiz'?'正解':'提供'}<b>${r.team.served}</b></div><div>${r.g==='quiz'?'誤答':'失敗'}<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
+    <div class="stats"><div>${E.isQuiz(r.g)?'正解':'提供'}<b>${r.team.served}</b></div><div>${E.isQuiz(r.g)?'誤答':'失敗'}<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>
     <div class="sec-h">貢献</div><div class="rank">`+ps.map(p=>`<div class="rk" style="--pc:${COLORS[p.slot%4]}"><div class="no">${p.id===mvp?'👑':''}</div>
       <div><div class="nm">${esc(p.name)}${p.id===me()?'（あなた）':''}${p.id===mvp?'<span class="mvp">MVP</span>':''}${p.left?'（退出）':''}</div>
-      <div class="sub">${r.g==='quiz'?`正解 ${p.served}・誤答 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`:`提供 ${p.served}・入れた${r.g==='atom'?'原子':isParts(r.g)?PM[r.g].unit:'試薬'} ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`}`).join('')+`</div>`;
+      <div class="sub">${E.isQuiz(r.g)?`正解 ${p.served}・誤答 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`:`提供 ${p.served}・入れた${r.g==='atom'?'原子':isParts(r.g)?PM[r.g].unit:'試薬'} ${p.atoms}・誤配 ${p.failed}</div></div><div class="sc">${p.pts}</div></div>`}`).join('')+`</div>`;
   h+=nightNote()+reviewHTML(r,'coop')+mpButtons();
   overlay(h,'result');
 }

@@ -820,8 +820,8 @@ body.ui-port .ptable.rx.parts .half .cell .sym{transform:none}
 /* =================== 科目の切り替え・英語モード =================== */
 .seg.subj{margin-bottom:6px}
 .seg.subj button{padding:6px;font-size:15px}
-#titleGame[data-subj="chem"] [data-g^="e"],#titleGame[data-subj="eng"] [data-g]:not([data-g^="e"]),
-#lobGame[data-subj="chem"] [data-g^="e"],#lobGame[data-subj="eng"] [data-g]:not([data-g^="e"]){display:none}
+/* モードの出し分けは科目ごとに showModes() が行う */
+.seg.subj{grid-template-columns:repeat(3,minmax(0,1fr))}
 .ptable.rx.eng .half{grid-template-rows:13px repeat(5,minmax(0,1fr)) 13px minmax(0,1fr)}
 .e-pre{background:#ffccbc}.e-root{background:#b3e5fc}.e-suf{background:var(--ticket);border-style:dashed!important}
 .e-head{background:#ffab91}.e-word{background:#dfe5e8}.e-slot{background:var(--cool);border-style:dashed!important}
