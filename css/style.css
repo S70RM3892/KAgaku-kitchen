@@ -854,3 +854,44 @@ body.quiz-on #game .quizbox{display:flex;flex-direction:column;gap:8px;position:
 .qz-ch button.right{background:var(--cool);opacity:1}
 .qz-ch button.wrong{background:var(--hot);color:#fff;opacity:1}
 @media (min-width:700px){.qz-ch{grid-template-columns:repeat(3,1fr)}}
+
+/* =================== 過去問 早押し =================== */
+.kk-box{background:#0003;border-radius:14px;padding:10px 12px;color:#d6e6ea;font-size:13px;line-height:1.6}
+.kk-box b{color:var(--ticket)}
+.kk-view{flex:0 1 auto;min-height:0;overflow:auto;background:#fff;border:3px solid var(--ink);border-radius:12px}
+.kk-lead{display:block;width:100%;height:auto;opacity:.75;border-bottom:2px dashed var(--hot)}
+.kk-paper{position:relative}
+.kk-paper img{display:block;width:100%;height:auto}
+.kk-shutter{position:absolute;left:0;right:0;bottom:0;top:0;background:repeating-linear-gradient(0deg,#3c5560 0 10px,#33494f 10px 12px);border-top:4px solid var(--hot);transition:top .1s linear}
+.kk-miss{padding:16px;font-weight:800;color:var(--ink)}
+.kk-label{color:#cfe3e8;font-size:12px;font-weight:800}.kk-label b{color:var(--ticket)}
+.kk-in{display:flex;gap:6px;align-items:center;min-height:34px}
+.kk-in span{width:34px;height:34px;border:3px dashed #ffffff55;border-radius:8px;display:grid;place-items:center;font-size:22px;color:#fff}
+.kk-in span.on{border-style:solid;border-color:var(--ticket);background:#ffffff18}
+.kk-in em{color:var(--hot);font-style:normal;font-weight:800;margin-left:auto}
+.kk-pad{flex:0 0 auto;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.kk-pad button{border:3px solid var(--ink);border-radius:10px;background:#fff;color:var(--ink);font-size:24px;padding:6px 0;box-shadow:0 3px 0 var(--ink);touch-action:manipulation}
+.kk-pad button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.kk-pad button:disabled{opacity:.45;box-shadow:none}
+@media (min-width:700px){.kk-pad{grid-template-columns:repeat(11,1fr)}}
+.kk-file{display:inline-flex;justify-content:center}
+.kk-list{display:flex;flex-direction:column;gap:10px;margin:8px 0}
+.kk-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:8px;background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px}
+.kk-row.off{opacity:.5}
+.kk-row.small{grid-template-columns:90px 1fr}
+.kk-img{max-height:260px;overflow:auto;border:1px solid #1221292a}
+.kk-img img{display:block;width:100%}.kk-img img.lead{opacity:.7;border-bottom:2px dashed var(--hot)}
+.kk-thumb{display:block;width:100%;max-width:220px;max-height:120px;object-fit:cover;object-position:top;border:1px solid #1221292a;margin-top:4px}
+.kk-ctl{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:800}
+#ovPanel .kk-f input:not([type=checkbox]),#ovPanel .kk-f select{font:inherit;font-size:14px;background:#fff;color:var(--ink);border:2px solid #12212966;border-radius:6px;padding:2px 4px;width:3.4em;min-height:0;height:auto;margin:0 2px;box-shadow:none}
+#ovPanel .kk-f select{width:auto}#ovPanel .kk-f input[data-f=year]{width:4.2em}#ovPanel .kk-f input[data-f=ans]{width:4.6em}
+.kk-f input.need,#ovPanel .kk-f input.need{border-color:var(--hot);background:#fff3f0}
+.kk-adj button{font:inherit;font-size:12px;border:2px solid var(--ink);border-radius:6px;background:var(--ticket);padding:1px 6px;margin:0 2px}
+@media (max-width:520px){.kk-row{grid-template-columns:1fr}}
+#quizbox.kk .kk-pad{margin-top:auto}
+body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,34%);grid-template-rows:auto auto auto 1fr;column-gap:12px;align-content:stretch;row-gap:6px}
+:where(body.ui-land) #quizbox.kk .qz-head{grid-column:1/-1}
+:where(body.ui-land) #quizbox.kk .kk-view{grid-column:1;grid-row:2/5;align-self:stretch;max-height:none}
+:where(body.ui-land) #quizbox.kk>:not(.qz-head):not(.kk-view){grid-column:2}
+:where(body.ui-land) #quizbox.kk .kk-pad{grid-template-columns:repeat(4,1fr);align-self:end}
+:where(body.ui-land) #quizbox.kk .kk-pad{gap:4px}:where(body.ui-land) #quizbox.kk .kk-pad button{font-size:18px;padding:1px 0;border-width:2px;box-shadow:0 2px 0 var(--ink)}

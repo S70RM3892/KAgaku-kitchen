@@ -48,5 +48,25 @@ import('../js/kyote.js').then(({KPHY,KCHEM})=>{
     }
     console.log(g,'ok',B.ALL.length,'questions');
   }
+  return import('../js/kakomon.js');
+}).then(({KAKO})=>{
+  // 過去問早押し：端末に読み込んだ問題（ここでは架空の4問）。答えはマークの数字、解答番号2つの問は2桁
+  const add=(k,subj,ans)=>{KAKO.Q[k]={k,n:k,cat:subj,subj,clues:Array(8).fill(''),ans,slots:ans.length};};
+  add('2099-phy-1-1','phy','3');add('2099-phy-1-2','phy','52');add('2099-chem-1-1','chem','0');add('2099-chem-2-1','chem','4');
+  KAKO.ALL=Object.keys(KAKO.Q);
+  assert.deepEqual(KAKO.STAGES[0].pool,['2099-phy-1-1','2099-phy-1-2'],'pool follows loaded items');
+  { const S=createGame({g:'kako',mode:'versus',stageId:'s3',players:P2,pool:['2099-phy-1-2']});begin(S);
+    const q=S.qz.q;assert.equal(q.k,'2099-phy-1-2');
+    apply(S,'p0',{t:'ans',c:'5'});assert.equal(q.state,'open','1 digit for 2 slots is ignored');
+    apply(S,'p0',{t:'ans',c:'25'});assert.ok(q.locked.p0,'wrong order is wrong');
+    apply(S,'p0',{t:'ans',c:'52'});assert.equal(q.state,'open','locked player cannot answer');
+    apply(S,'p1',{t:'ans',c:'52'});assert.equal(q.state,'done');assert.equal(q.by,'p1');assert.ok(S.players.p1.score>0);
+  }
+  for(const st of ['s1','s2','s3','rv'])for(const mode of ['solo','coop','versus']){
+    const S=createGame({g:'kako',mode,stageId:st,players:mode==='solo'?[{id:'p0',name:'me'}]:P2});begin(S);
+    let guard=0;while(!S.over&&guard++<100000){const q=S.qz.q;if(q&&q.state==='open'&&Math.random()<0.02)apply(S,S.order[0],{t:'ans',c:Math.random()<0.5?KAKO.answer(q.k):'9'});tick(S,0.1);}
+    assert.ok(S.over,`kako/${st}/${mode}`);
+  }
+  console.log('kako ok');
   console.log('QUIZ PASS');
 });

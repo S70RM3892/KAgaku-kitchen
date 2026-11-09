@@ -8,6 +8,7 @@ import * as I from './ion.js';
 import {ROOTM,SYNM,WORDM} from './eng.js';
 import * as QZ from './quiz.js';
 import {KPHY,KCHEM} from './kyote.js';
+import {KAKO} from './kakomon.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
 export const ROT_SEC=40;      // 協力：棚替えの間隔
 export const REQ_LIFE=15;     // 協力：リクエストの寿命
@@ -129,7 +130,8 @@ RULES.esyn=engRules(SYNM,{life:24});
 RULES.eword=engRules(WORDM,{life:14});
 // 早押しクイズ：注文と鍋は使わず、1問ずつヒントが出て、選択肢を早く正しく選んだ人が得点
 // 問題の束：物質の早押し（quiz）と、共テ物理（kphy）・共テ化学（kchem）。仕組みは同じ
-export const QBANK={quiz:QZ,kphy:KPHY,kchem:KCHEM};
+// kako：各自の端末に読み込んだ過去問（問題の画像と正解は端末の中だけにある）
+export const QBANK={quiz:QZ,kphy:KPHY,kchem:KCHEM,kako:KAKO};
 export const isQuiz=g=>has(QBANK,g);
 const QB=S=>QBANK[S.g];
 const quizRules=B=>({stages:B.STAGES,review:B.REVIEW,cells:[],col:{},
@@ -141,7 +143,7 @@ export const QUIZ_WAIT=3.5;   // 正解発表のあと次の問題までの秒�
 export const QUIZ_TAIL=6;     // 最後のヒントのあと答えられる秒数
 export const quizGain=q=>10+6*(q.clues.length-q.shown);       // 早く答えるほど高い
 export const quizLoss=q=>3+2*(q.clues.length-q.shown);        // 早く間違えるほど痛い（当てずっぽうは損）
-export const GAMES={quiz:'早押しクイズ',kphy:'共テ物理 早押し',kchem:'共テ化学 早押し',rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
+export const GAMES={quiz:'早押しクイズ',kphy:'共テ物理 早押し',kchem:'共テ化学 早押し',kako:'過去問 早押し',rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
 // 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
 export const BUSY=[null,
   {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},
@@ -459,20 +461,23 @@ function nextQuiz(S){
 }
 function endQuiz(S,by){
   const Z=S.qz,q=Z.q;q.state='done';q.by=by;q.wait=QUIZ_WAIT;
-  if(!by){S.log.push({k:q.k,ok:false,why:'正解者なし',by:null,mode:'name',ci:0});emit(S,'*',{h:`正解は ${QB(S).Q[q.k].n}`,k:'ng',s:'expire'});}
+  if(!by){S.log.push({k:q.k,ok:false,why:'正解者なし',by:null,mode:'name',ci:0});emit(S,'*',{h:`正解は ${QB(S).Q[q.k].n}${QB(S).answer?`（${QB(S).answer(q.k)}）`:''}`,k:'ng',s:'expire'});}
 }
 function tickQuiz(S,dt){
   const Z=S.qz,q=Z.q;if(!q)return;
   if(q.state==='open'){
     q.t+=dt;
     if(q.shown<q.clues.length&&q.t>=q.shown*Z.reveal){q.shown++;emit(S,'*',{s:'tick'});}
-    if(q.shown>=q.clues.length&&q.t>=q.clues.length*Z.reveal+QUIZ_TAIL)endQuiz(S,null);
+    if(q.shown>=q.clues.length&&q.t>=q.clues.length*Z.reveal+(QB(S).tail||QUIZ_TAIL))endQuiz(S,null);
   }else{q.wait-=dt;if(q.wait<=0)nextQuiz(S);}
 }
 function answerQuiz(S,pid,P,c){
-  const q=S.qz&&S.qz.q;if(!q||q.state!=='open'||q.locked[pid]||!q.choices.includes(c))return;
-  const vs=S.mode==='versus',nm=QB(S).Q[q.k].n;
-  if(c===q.k){
+  const q=S.qz&&S.qz.q,B=QB(S);if(!q||q.state!=='open'||q.locked[pid])return;
+  // 過去問はマークの数字（解答番号が複数ならその数だけ並べた文字列）、それ以外は選択肢のどれか
+  const right=B.answer?B.answer(q.k):q.k;
+  if(B.answer?!(/^\d+$/.test(c)&&c.length===right.length):!q.choices.includes(c))return;
+  const vs=S.mode==='versus',nm=B.Q[q.k].n;
+  if(c===right){
     const pts=Math.round(quizGain(q)*(S.bpts??1));
     P.score+=pts;P.pts+=pts;P.served++;P.combo++;P.maxCombo=Math.max(P.maxCombo,P.combo);
     if(!vs){S.team.score+=pts;S.team.served++;S.team.combo++;S.team.maxCombo=Math.max(S.team.maxCombo,S.team.combo);}
@@ -485,7 +490,7 @@ function answerQuiz(S,pid,P,c){
   const pen=quizLoss(q);q.locked[pid]=c;
   P.score=Math.max(0,P.score-pen);P.failed++;P.combo=0;
   if(!vs){S.team.score=Math.max(0,S.team.score-pen);S.team.failed++;S.team.combo=0;}
-  emit(S,pid,{h:`ちがう −${pen}<small>${QB(S).Q[c].n} ではない</small>`,k:'ng',s:'ng',m:[q.k,'ng']});
+  emit(S,pid,{h:`ちがう −${pen}<small>${B.answer?c:B.Q[c].n} ではない</small>`,k:'ng',s:'ng',m:[q.k,'ng']});
   if(S.order.filter(x=>!S.players[x].left).every(x=>q.locked[x]))endQuiz(S,null);
 }
 
