@@ -384,7 +384,7 @@ function renderKakoBox(g){
   const by={};KKSAVED.forEach(it=>{const k=it.year+' '+KK.subjName(it.subj);by[k]=by[k]||{n:0,ok:0};by[k].n++;if(it.on&&it.ans)by[k].ok++;});
   el.innerHTML=`<div class="kk-box"><b>この端末の過去問</b>：${KKSAVED.length?Object.entries(by).sort().map(([k,v])=>`${esc(k)} ${v.ok}問`).join('・'):'まだ無い'}
     <p class="note">問題と正解はこの端末の中だけに保存され、サーバーやGitHubには送られない。</p>
-    <div class="row-btns"><button class="btn go" data-kk="import">📄 PDFを読み込む</button>${KKSAVED.length?'<button class="btn sub" data-kk="manage">読み込んだ過去問</button>':''}</div></div>`;
+    <div class="row-btns"><button class="btn go" data-kk="auto">⚡ 全自動で取り込む</button><button class="btn sub" data-kk="import">📄 PDFを選ぶ</button>${KKSAVED.length?'<button class="btn sub" data-kk="manage">読み込んだ過去問</button>':''}</div></div>`;
 }
 // PDFを画面のどこにドロップしても読み込む（パソコン向け）
 document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')&&!(SES&&SES.role!=='solo')){e.preventDefault();}});
@@ -407,7 +407,8 @@ function kakoImportDialog(){
         <span id="kkCount" class="note"></span>
       </div>
       <div class="row-btns"><button class="btn go" data-kauto disabled>まだ無い年度を全部取り込む</button><button class="btn sub" data-kstop hidden>止める</button></div>
-      <details class="kk-how"><summary>中継を起動（Android・パソコン。コマンドを1回貼るだけ）</summary>
+      <p class="note">自分専用の中継（クラウド）を使うなら、⚙設定で合言葉を入れるだけ。下のコマンドは要らない。</p>
+      <details class="kk-how"><summary>この端末で中継を動かす（Termux・パソコン）</summary>
         <p class="note">コピーしたコマンドを、Android は「Termux」（F-Droid 版）、Mac は「ターミナル」、Windows は「PowerShell」（Python が必要）に貼り付けて Enter。
         中継が起動するとこのページが開き、<b>まだ無い年度を自動で取り込み始める</b>。中継はこの端末の中だけで動き、配布元の過去問PDFだけを受け取ってこのページに渡す（保存はしない）。
         パソコンは Chrome か Firefox で（Safari は端末の中の中継につながれない）。Chrome は最初に「ローカルネットワークへのアクセス」を聞くので「許可」。</p>
@@ -549,12 +550,32 @@ const relayCmd={
   unix:()=>`curl -fsSL '${RELAY_PY()}' -o ~/kk-relay.py && python3 ~/kk-relay.py '${APP_URL()}'`,
   win:()=>`Invoke-WebRequest '${RELAY_PY()}' -OutFile $HOME\\kk-relay.py; py $HOME\\kk-relay.py '${APP_URL()}'`,
 };
-async function relayPing(){
+// 自分専用の中継（クラウド：あなたの Supabase の Edge Function「kk-relay」）。合言葉はこの端末にだけ保存（書き出しファイルにも入れない）
+const CLOUD='https://zcwqgnlcigkieymhbnvh.supabase.co/functions/v1/kk-relay';
+const cloudPass=()=>{try{return localStorage.getItem('kk-relay-pass')||'';}catch(e){return '';}};
+let RELAY_MODE=null;   // 'cloud'（自分専用のクラウド中継）・'local'（この端末の中継）・null
+async function cloudPing(force){
+  const p=cloudPass();if(!p)return false;
+  if(!force&&Date.now()-(UI.cloudOkAt||0)<60000)return true;   // 1分以内につながっていれば聞き直さない
+  try{const ac=new AbortController();setTimeout(()=>ac.abort(),12000);   // 止まっていたサーバーが起きるのを待つ
+    const r=await fetch(CLOUD+'?ping=1',{cache:'no-store',headers:{'x-kk-pass':p},signal:ac.signal});
+    UI.cloudErr=r.ok?'':r.status===401?'合言葉がちがう':r.status===503?'サーバーに合言葉がまだ設定されていない':'中継の応答 '+r.status;
+    if(r.ok)UI.cloudOkAt=Date.now();return r.ok;}catch(e){UI.cloudErr='中継につながらない';return false;}
+}
+async function localPing(){
   try{const ac=new AbortController();setTimeout(()=>ac.abort(),1500);
     const r=await fetch(RELAY+'/ping',{cache:'no-store',signal:ac.signal});return r.ok&&!!(await r.json()).ok;}catch(e){return false;}
 }
+async function relayPing(){
+  if(await cloudPing()){RELAY_MODE='cloud';return true;}
+  if(await localPing()){RELAY_MODE='local';return true;}
+  RELAY_MODE=null;return false;
+}
 async function relayGet(u){
-  const r=await fetch(RELAY+'/get?u='+encodeURIComponent(u),{cache:'no-store'});
+  const cloud=RELAY_MODE==='cloud';
+  const r=cloud?await fetch(CLOUD+'?u='+encodeURIComponent(u),{cache:'no-store',headers:{'x-kk-pass':cloudPass()}})
+    :await fetch(RELAY+'/get?u='+encodeURIComponent(u),{cache:'no-store'});
+  if(cloud&&r.status===401){UI.cloudOkAt=0;throw Object.assign(new Error('合言葉がちがう（⚙設定で入れ直す）'),{refused:true});}
   if(r.status===429){const e=new Error('配布元にことわられた（時間をおいてから。急ぐなら下の「1つずつ開いて保存する」）');e.refused=true;throw e;}
   if(!r.ok)throw new Error('中継から受け取れなかった（'+r.status+'）');
   return new File([await r.blob()],u.split('/').pop(),{type:'application/pdf'});
@@ -568,7 +589,8 @@ function relayWatch(){
     if(OVK!=='kakoimp')return;
     const ok=await relayPing();
     const st=$('kkRelaySt'),b=document.querySelector('[data-kauto]');
-    if(st)st.innerHTML=ok?'<b class="ok">中継につながった</b>':'中継が動いていない（下の「中継を起動」）';
+    if(st)st.innerHTML=ok?(RELAY_MODE==='cloud'?'<b class="ok">自分専用の中継（クラウド）につながった</b>':'<b class="ok">この端末の中継につながった</b>')
+      :cloudPass()?`中継につながらない（${esc(UI.cloudErr||'')}。⚙設定の合言葉を確認）`:'中継が使えない（⚙設定で合言葉を入れるか、下の「中継を起動」）';
     if(b)b.disabled=!ok||!!AUTO_RUN;
     if(ok&&UI.kkAutoPending){UI.kkAutoPending=false;kakoAutoImport();}
     // 見つからない間はゆっくり（5秒おき）、中継から開かれたときは早め（1秒おき）に探す
@@ -669,7 +691,9 @@ function kakoManage(){
     <div class="row-btns">${Object.keys(by).sort().map(k=>{const [y,sj]=k.split('-');return `<button class="btn sub" data-kk="del" data-k="${esc(k)}">🗑 ${esc(y)} ${KK.subjName(sj)}（${by[k].length}問）を消す</button>`;}).join('')}</div>
     <div class="kk-list">${rows}</div><div class="row-btns"><button class="btn go" data-ov="close">閉じる</button></div>`,'kakomanage');
 }
-$('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');if(!b)return;if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
+$('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');if(!b)return;
+  if(b.dataset.kk==='auto'){if(bedGuard(()=>{kakoImportDialog();UI.kkAutoPending=true;relayWatch();}))return;kakoImportDialog();UI.kkAutoPending=true;relayWatch();}   // ワンボタン：中継がつながりしだい自動で取り込む
+  else if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
 
 /* ================= 特訓（単元 × ルール）・今日の10問・今日の復習・誤答ノート ================= */
 const DRILL_BANKS=['kmath','kphy','kchem','quiz'];
@@ -2408,6 +2432,8 @@ function openSettings(back){
   const rows=SETTINGS.map(x=>`<div class="set-row"><div class="set-t"><b>${x.t}</b>${x.d?`<small>${x.d}</small>`:''}</div>
     <div class="seg set-seg">${x.o.map(([v,l])=>`<button data-set="${x.k}" data-v='${JSON.stringify(v)}' class="${SAVE.ui[x.k]===v?'on':''}">${l}</button>`).join('')}</div></div>`).join('');
   overlay(`<h2>⚙ 設定</h2><div class="settings">${rows}</div>
+    <div class="set-row"><div class="set-t"><b>過去問の中継の合言葉（自分専用）</b><small>Supabase の Edge Function「kk-relay」に設定した合言葉。入れると、過去問の「⚡ 全自動で取り込む」がボタン1つで動く。この端末にだけ保存し、書き出しファイルにも入れない。<b>ほかの人に教えない</b>（教えると配布元のPDFを他人に送ることになる）</small></div>
+      <div class="row-btns rp-row"><input type="password" id="relayPass" autocomplete="off" placeholder="${cloudPass()?'（保存済み）':'合言葉'}"><button class="btn sub mini" data-ov="rpsave">保存して確認</button>${cloudPass()?'<button class="btn sub mini" data-ov="rpclear">消す</button>':''}</div><small id="relayPassSt"></small></div>
     <div class="set-row"><div class="set-t"><b>学習記録の引っ越し</b><small>この端末の記録（習熟度・学習記録・特訓のベスト）をファイルに書き出す／読み込む。過去問の画像は含まない</small></div>
       <div class="row-btns"><button class="btn sub mini" data-ov="export">書き出す</button><label class="btn sub mini">読み込む<input type="file" id="impFile" accept="application/json,.json" hidden></label></div></div>
     <div class="row-btns"><button class="btn go" data-ov="setclose">閉じる</button></div>`,'settings');
@@ -2447,6 +2473,9 @@ $('ov').addEventListener('click',e=>{
     case 'drillback':drillHub();break;
     case 'bed5':{UI.bedOk=Date.now()+5*60e3;closeOverlay();const go=UI.bedGo;UI.bedGo=null;if(go)go();break;}
     case 'export':exportSave();break;
+    case 'rpsave':{const v=($('relayPass')||{}).value||'';if(v)try{localStorage.setItem('kk-relay-pass',v);}catch(e){}
+      const st=$('relayPassSt');if(st)st.textContent='確認中…';cloudPing(true).then(ok=>{const s2=$('relayPassSt');if(s2)s2.textContent=ok?'✓ 自分専用の中継につながった':'× '+(UI.cloudErr||'つながらない');});break;}
+    case 'rpclear':{try{localStorage.removeItem('kk-relay-pass');}catch(e){}UI.cloudOkAt=0;openSettings(UI.setBack);break;}
     case 'impok':{try{localStorage.setItem(SAVE_KEY,JSON.stringify(UI.impSave));}catch(e){}location.reload();break;}
     case 'share':shareResult(UI.shareText||'');break;
     case 'next':{const g=SES&&SES.cfg?SES.cfg.g:SAVE.g,ST=stagesOf(g),i=ST.findIndex(s=>s.id===(SES&&SES.cfg&&SES.cfg.stageId));closeOverlay();if(ST[i+1])startSolo(ST[i+1].id,g);break;}
