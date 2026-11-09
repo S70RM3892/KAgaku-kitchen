@@ -71,8 +71,17 @@ for(const [g,M,unit,kind] of [['eroot',ROOTM,'部品','build'],['esyn',SYNM,'語
 const isParts=g=>Object.prototype.hasOwnProperty.call(PM,g);
 const curG=()=>{const V=view();return V&&V.g?V.g:SAVE.g;};
 function mst(id,g=curG()){const M=SV(g).mastery;return M[id]||(M[id]={box:0,seen:0,ok:0,ng:0});}
+// 学習記録：日ごとの正解・まちがいの数と遊んだ時間、時刻ごとの解いた数（ダッシュボード用。この端末の中だけ）
+const dayKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function statsOf(){const S=SAVE.stats||(SAVE.stats={days:{},hours:Array(24).fill(0)});if(!Array.isArray(S.hours)||S.hours.length!==24)S.hours=Array(24).fill(0);S.days=S.days||{};return S;}
+function statDay(d=new Date()){const S=statsOf(),k=dayKey(d);return S.days[k]||(S.days[k]={ok:0,ng:0,ms:0,games:0});}
+function statAnswer(ok){
+  const S=statsOf(),d=new Date(),D=statDay(d);if(ok)D.ok++;else D.ng++;S.hours[d.getHours()]++;
+  const ks=Object.keys(S.days);if(ks.length>400)ks.sort().slice(0,ks.length-400).forEach(k=>delete S.days[k]);   // 古い日は捨てる（約1年分を残す）
+}
 function applyMastery(m,g=curG()){
   if(!Array.isArray(m)||!knownKey(g,m[0]))return;
+  if(m[1]==='ok'||m[1]==='okh')statAnswer(true);else if(m[1]==='ng'||m[1]==='exp')statAnswer(false);
   const x=mst(m[0],g);
   switch(m[1]){
     case 'seen':x.seen++;break;
@@ -660,6 +669,91 @@ function kakoManage(){
     <div class="kk-list">${rows}</div><div class="row-btns"><button class="btn go" data-ov="close">閉じる</button></div>`,'kakomanage');
 }
 $('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');if(!b)return;if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
+
+/* ================= 学習記録ダッシュボード ================= */
+// 項目の名前と分類（苦手の一覧・分類ごとの正答率に使う）
+function itemInfo(g,k){
+  if(E.isQuiz(g)){const q=E.QBANK[g].Q[k];return q?{n:q.n,c:String(q.cat||'').replace(/^\w+:/,'')}:null;}
+  if(g==='rx'){const it=MENU[k];return it?{n:nameOf(it.t),c:CATNAME[it.c]||''}:null;}
+  if(g==='atom'){const d=A.BYID[k];return d?{n:d.n,c:A.CATNAME[d.c]||''}:null;}
+  const M=isParts(g)?PM[g].M:null,d=M&&M.BYID&&M.BYID[k];if(!d)return null;
+  return {n:d.n||d.w||d.pat||k,c:d.k||(d.lv?`レベル${d.lv}`:'')};
+}
+function modeTotal(g){
+  if(E.isQuiz(g))return E.QBANK[g].ALL.length;if(g==='rx')return Object.keys(MENU).length;if(g==='atom')return A.DB.length;
+  const M=isParts(g)?PM[g].M:null;return M?(M.ALL||M.DB||[]).length:0;
+}
+function modeStats(g){
+  const M=SV(g).mastery;let seen=0,master=0,ok=0,ng=0;const cat={};
+  for(const k in M){const m=M[k];if(!m||!m.seen||!knownKey(g,k))continue;seen++;if(m.box>=4)master++;ok+=m.ok;ng+=m.ng;
+    const inf=itemInfo(g,k),c=inf&&inf.c||'その他';const C=cat[c]||(cat[c]={ok:0,ng:0});C.ok+=m.ok;C.ng+=m.ng;}
+  return {seen,master,ok,ng,total:modeTotal(g),cat};
+}
+function streakDays(){
+  const S=statsOf(),has=d=>{const x=S.days[dayKey(d)];return x&&(x.ok+x.ng+x.games)>0;};
+  const d=new Date();if(!has(d))d.setDate(d.getDate()-1);   // 今日まだでも、昨日までの連続は数える
+  let n=0;while(has(d)){n++;d.setDate(d.getDate()-1);}return n;
+}
+const pct=(a,b)=>b?Math.round(a*100/b):0;
+function statsOverlay(){
+  const S=statsOf(),today=statDay(),now=new Date();
+  const days=[...Array(14)].map((_,i)=>{const d=new Date(now);d.setDate(d.getDate()-13+i);const x=S.days[dayKey(d)]||{ok:0,ng:0,ms:0,games:0};return {d,k:dayKey(d),...x};});
+  const week=days.slice(-7),weekMin=Math.round(week.reduce((a,x)=>a+x.ms,0)/60000);
+  const modes=GS.map(g=>({g,...modeStats(g)})),masterAll=modes.reduce((a,m)=>a+m.master,0);
+  // 14日の棒（正解・まちがいを積む）
+  const mx=Math.max(10,...days.map(x=>x.ok+x.ng)),H=120;
+  const bars=days.map((x,i)=>{const hOk=x.ok/mx*H,hNg=x.ng/mx*H;
+    return `<div class="sd-col" data-day="${x.k}" tabindex="0" aria-label="${x.d.getMonth()+1}月${x.d.getDate()}日 正解${x.ok} まちがい${x.ng}">
+      <div class="sd-stack" style="height:${H}px">${x.ng?`<i class="ng" style="height:${hNg}px"></i>`:''}${x.ok?`<i class="ok" style="height:${hOk}px"></i>`:''}</div>
+      <span>${i%2===1||i===13?`${x.d.getMonth()+1}/${x.d.getDate()}`:''}</span></div>`;}).join('');
+  // 時刻ごと（夜ふかしの見張り）
+  const hs=S.hours,hm=Math.max(1,...hs),tot=hs.reduce((a,b)=>a+b,0),late=[23,0,1,2,3,4].reduce((a,h)=>a+hs[h],0),lateP=pct(late,tot);
+  const hbars=hs.map((v,h)=>`<div class="sh-col" title="${h}時台 ${v}問"><i style="height:${v/hm*60}px"></i><span>${h%6===0?h:''}</span></div>`).join('');
+  // 苦手（全部のモードから）
+  const weak=[];for(const g of GS){const M=SV(g).mastery;for(const k in M){const m=M[k];if(!m||!m.seen||!m.ng||!knownKey(g,k))continue;
+    if(m.box<=1||m.ng>m.ok){const inf=itemInfo(g,k);if(inf)weak.push({g,k,n:inf.n,ok:m.ok,ng:m.ng,box:m.box,sc:m.ng*2-m.ok+(5-m.box)});}}}
+  weak.sort((a,b)=>b.sc-a.sc);const weakTop=weak.slice(0,10);
+  const modeRows=modes.filter(m=>m.total).map(m=>{
+    const cats=Object.entries(m.cat).filter(([,v])=>v.ok+v.ng>=3).sort((a,b)=>pct(a[1].ok,a[1].ok+a[1].ng)-pct(b[1].ok,b[1].ok+b[1].ng));
+    const worst=cats[0];
+    return `<div class="sm-row"><div class="sm-h"><b>${esc(E.GAMES[m.g])}</b><span>${m.seen?`覚えた ${m.master} / ${m.total}${UNIT[GK(m.g)]}・正答率 ${pct(m.ok,m.ok+m.ng)}%`:'まだ'}</span></div>
+      ${m.seen?`<div class="sm-bar" role="img" aria-label="覚えた割合 ${pct(m.master,m.total)}%"><i style="width:${Math.max(1,pct(m.master,m.total))}%"></i></div>`:''}
+      ${worst&&cats.length>1?`<div class="sm-w">いちばん苦手な分類：<b>${esc(worst[0])}</b>（正答率 ${pct(worst[1].ok,worst[1].ok+worst[1].ng)}%）</div>`:''}</div>`;}).join('');
+  overlay(`<h2>📊 学習記録</h2>
+    <div class="sd-kpi">
+      <div><small>連続</small><b>${streakDays()}</b><small>日</small></div>
+      <div><small>今日</small><b>${today.ok+today.ng}</b><small>問・正答率 ${pct(today.ok,today.ok+today.ng)}%</small></div>
+      <div><small>この7日</small><b>${weekMin}</b><small>分</small></div>
+      <div><small>覚えた</small><b>${masterAll}</b><small>項目</small></div>
+    </div>
+    <div class="sd-card"><div class="sd-t">この14日に解いた数</div>
+      <div class="sd-leg"><span><i class="ok"></i>正解</span><span><i class="ng"></i>まちがい</span><span class="sd-max">上端 ${mx}問</span></div>
+      <div class="sd-chart">${bars}</div>
+      <p class="sd-tip" id="sdTip">棒を押すと、その日の数が出る</p>
+      <details><summary>表で見る</summary><table class="sd-tbl"><tr><th>日</th><th>正解</th><th>まちがい</th><th>時間</th></tr>${days.slice().reverse().map(x=>`<tr><td>${x.d.getMonth()+1}/${x.d.getDate()}</td><td>${x.ok}</td><td>${x.ng}</td><td>${Math.round(x.ms/60000)}分</td></tr>`).join('')}</table></details>
+    </div>
+    <div class="sd-card"><div class="sd-t">解いた時刻（全期間）</div>
+      <div class="sh-chart">${hbars}</div>
+      ${tot?(lateP>=15?`<p class="sd-warn">🌙 23時〜5時に解いた分が ${lateP}%。夜ふかしで睡眠を削ると覚えたことが定着しにくい。寝る1時間前には切り上げろ。</p>`:`<p class="note">23時〜5時に解いた分は ${lateP}%。この調子。</p>`):'<p class="note">まだ記録がない</p>'}
+    </div>
+    <div class="sd-card"><div class="sd-t">モードごと</div>${modeRows}</div>
+    <div class="sd-card"><div class="sd-t">苦手トップ10</div>
+      ${weakTop.length?weakTop.map(w=>`<div class="sw-row"><div><b>${esc(w.n)}</b><small>${esc(E.GAMES[w.g])}・正解 ${w.ok}・まちがい ${w.ng}</small></div><button class="btn sub mini" data-sdrv="${w.g}">苦手克服ラン</button></div>`).join(''):'<p class="note">まちがえた項目はまだない</p>'}
+    </div>
+    <p class="sd-foot">記録はこの端末の中だけにある。</p>
+    <div class="row-btns"><button class="btn go" data-ov="close">閉じる</button></div>`,'stats');
+}
+$('ov').addEventListener('click',e=>{
+  if(OVK!=='stats')return;
+  const c=e.target.closest('[data-day]');
+  if(c){const x=statsOf().days[c.dataset.day]||{ok:0,ng:0,ms:0};const [,m,d]=c.dataset.day.split('-');
+    document.querySelectorAll('.sd-col.on').forEach(z=>z.classList.remove('on'));c.classList.add('on');
+    $('sdTip').textContent=`${+m}/${+d}：正解 ${x.ok}・まちがい ${x.ng}・${Math.round((x.ms||0)/60000)}分`;return;}
+  const r=e.target.closest('[data-sdrv]');
+  if(r){const g=r.dataset.sdrv;closeOverlay();SAVE.g=g;persist();renderTitle();startSolo('rv',g);}
+});
+$('ov').addEventListener('mouseover',e=>{if(OVK!=='stats')return;const c=e.target.closest('[data-day]');if(c)c.click();});
+$('btnStats').addEventListener('click',()=>{audio();statsOverlay();});
 
 /* ================= 全国ランキング ================= */
 const RKV={g:'rx',st:'s1',days:7};
@@ -1320,6 +1414,7 @@ async function wake(on){
 }
 function enterGame(){
   const V=view();if(!V)return;
+  UI.playT0=Date.now();
   UI.sel=null;UI.sig={};UI.cards=new Map();$('orders').innerHTML='';UI.lastTick=-1;UI.pauseShown=false;UI.incSig='';
   $('hudStage').textContent=(V.mode==='coop'?'協力・':V.mode==='versus'?'対戦・':'')+E.stageById(V.g,V.stageId).name+(V.busy&&V.busy!==2?`・${E.busyOf(V.busy).name}`:'');
   // 早押しクイズは棚と伝票を使わず、問題の画面を重ねる
@@ -2203,6 +2298,7 @@ $('ov').addEventListener('click',e=>{
 
 /* ================= 結果 ================= */
 function showResults(r){
+  if(UI.playT0){const D=statDay();D.ms+=Math.min(2*3600e3,Date.now()-UI.playT0);D.games++;UI.playT0=0;persistSoon();}
   stopHold();bgmStop();wake(false);closeStamps();
   $('ptable').classList.remove('dark');$('incoming').classList.remove('on');$('game').classList.remove('danger');
   sfx('ready');
