@@ -913,3 +913,7 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .kk-yr{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:13px;border-bottom:1px solid #12212922;padding:3px 0}
 .kk-yr b{width:3.2em;font-family:var(--font-display)}
 .kk-yr a{font-weight:800;color:var(--hot)}
+.kk-range{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:800;font-size:13px;margin:6px 0}
+.kk-range select{font:inherit;border:2px solid var(--ink);border-radius:6px;background:#fff;color:var(--ink);padding:2px}
+.kk-dl{flex-wrap:wrap}
+.kk-how{margin:6px 0;font-size:13px}.kk-how summary{font-weight:800;cursor:pointer}.kk-how ol{padding-left:1.3em;margin:4px 0;line-height:1.6}

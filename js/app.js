@@ -386,15 +386,60 @@ function kakoImportDialog(){
     <label class="btn sub kk-file kk-dir">フォルダごと<input type="file" id="kkDir" webkitdirectory multiple hidden></label></div>
     <p class="note">選ぶだけで、切り取り・正解の割り当て・保存まで全部自動で行う。スキャンしたPDF（画像だけのPDF）は文字を読み取るので、1科目1分ほどかかる。</p>
     <details class="kk-get"><summary>📥 過去問のPDFを手に入れる（2004〜2026年度）</summary>
-      <p class="note">押すと配布元のPDFが開く。保存（共有 →「"ファイル"に保存」など）してから、上の「ファイルを選ぶ」でまとめて選ぶ。
-      年度・科目・問題か正解かはファイル名から自動で見分ける。出どころ：<a href="${KSRC.SOURCE}" target="_blank" rel="noopener">日本の学校「大学入学共通テスト問題＆解答」</a></p>
+      <p class="note">配布元はブラウザから直接取り込むことを許していないので、<b>自分の端末</b>でまとめて保存してから選ぶ。
+      ファイル名や大きさで年度・科目を自動で見分ける。出どころ：<a href="${KSRC.SOURCE}" target="_blank" rel="noopener">日本の学校「大学入学共通テスト問題＆解答」</a></p>
+      <div class="kk-range">
+        <select data-kr="from">${[...new Set(KSRC.CATALOG.map(c=>c.year))].sort((a,b)=>b-a).map(y=>`<option ${y===2021?'selected':''}>${y}</option>`).join('')}</select>〜
+        <select data-kr="to">${[...new Set(KSRC.CATALOG.map(c=>c.year))].sort((a,b)=>b-a).map(y=>`<option>${y}</option>`).join('')}</select>年度
+        <label><input type="checkbox" data-kr="phy" checked>物理</label><label><input type="checkbox" data-kr="chem" checked>化学</label>
+        <span id="kkCount" class="note"></span>
+      </div>
+      <div class="row-btns kk-dl">
+        <button class="btn sub mini" data-kdl="urls">URL一覧をコピー</button>
+        <button class="btn sub mini" data-kdl="unix">Mac用コマンドをコピー</button>
+        <button class="btn sub mini" data-kdl="win">Windows用コマンドをコピー</button>
+      </div>
+      <p class="note" id="kkDlMsg"></p>
+      <details class="kk-how"><summary>iPhone・iPad：「ショートカット」で一括保存（最初に1回だけ作る）</summary>
+        <ol>
+          <li>「ショートカット」App で ＋ を押し、次のアクションを上から順に追加する：<br>
+            ①「クリップボードを取得」 ②「テキストを分割」（区切り：改行） ③「各項目を繰り返す」<br>
+            ④ 繰り返しの中に「URLの内容を取得」（URL：繰り返し項目） ⑤ その下に「ファイルを保存」（保存先を尋ねる：オフ、保存先：「ファイル」の好きなフォルダ）</li>
+          <li>名前を「過去問を保存」などにして完了。</li>
+          <li>ここで「URL一覧をコピー」→ ショートカットを実行 → 保存したフォルダのPDFを上の「ファイルを選ぶ」でまとめて選ぶ。</li>
+        </ol>
+        <p class="note">アクションの名前はiOSのバージョンで少し違うことがある。</p>
+      </details>
+      <details class="kk-how"><summary>パソコン：コマンドで一括保存</summary>
+        <p class="note">Mac は「ターミナル」、Windows は「PowerShell」を開き、コピーしたコマンドを貼り付けて Enter。
+        今いる場所に kakomon フォルダができ、PDFが1秒おきに保存される。終わったら「フォルダごと」でそのフォルダを選ぶ。</p>
+      </details>
+      <details class="kk-how"><summary>1つずつ開いて保存する</summary>
       <div class="kk-years">${[...new Set(KSRC.CATALOG.map(c=>c.year))].sort((a,b)=>b-a).map(y=>`<div class="kk-yr"><b>${y}</b>${KSRC.CATALOG.filter(c=>c.year===y).map(c=>`<span>${esc(c.label)} <a href="${esc(c.q)}" target="_blank" rel="noopener">問題</a> <a href="${esc(c.a)}" target="_blank" rel="noopener">正解</a></span>`).join('')}</div>`).join('')}</div>
+      </details>
     </details>
     <p class="note" id="kkMsg">読み込みはこの端末の中だけで行う。</p>
     <div class="row-btns"><button class="btn sub" data-ov="close">やめる</button></div>`,'kakoimp');
   $('kkFiles').addEventListener('change',e=>kakoReadFiles([...e.target.files]));
+  kakoDlCount();
   const dir=$('kkDir');if(!('webkitdirectory' in dir))dir.parentElement.remove();else dir.addEventListener('change',e=>kakoReadFiles([...e.target.files]));
 }
+// 自分の端末で一括保存するための一覧（年度の範囲・科目を選ぶ）
+function kakoDlPick(){
+  const v=k=>document.querySelector(`[data-kr="${k}"]`);if(!v('from'))return [];
+  let a=+v('from').value,b=+v('to').value;if(a>b)[a,b]=[b,a];
+  return KSRC.pick(a,b,['phy','chem'].filter(k=>v(k).checked));
+}
+function kakoDlCount(){const el=$('kkCount');if(el){const l=kakoDlPick();el.textContent=`${l.length*2}ファイル`;}}
+document.addEventListener('change',e=>{if(e.target.closest('[data-kr]'))kakoDlCount();});
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-kdl]');if(!b)return;
+  const l=kakoDlPick(),msg=$('kkDlMsg');if(!l.length){if(msg)msg.textContent='年度と科目を選ぶ';return;}
+  const t=b.dataset.kdl==='urls'?KSRC.urlList(l):b.dataset.kdl==='unix'?KSRC.cmdUnix(l):KSRC.cmdWin(l);
+  let ok=false;try{await navigator.clipboard.writeText(t);ok=true;}catch(err){}
+  if(!ok){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy');}catch(err){}ta.remove();}
+  if(msg)msg.textContent=ok?`コピーした（${l.length*2}ファイル分）`:'コピーできなかった。長押しで選んでコピーして';
+});
 async function kakoReadFiles(files){
   const msg=$('kkMsg');
   files=files.filter(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
