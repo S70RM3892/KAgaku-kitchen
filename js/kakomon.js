@@ -201,6 +201,16 @@ export function pickAnswers(P,answers){
   cand.sort((a,b)=>b.sc-a.sc);
   return cand.length&&cand[0].sc>=0?cand[0].map:{};
 }
+// 解答番号の割り当てを2通り試し、正解表と数が合う方を使う
+// A：本文中に見つけた解答番号のとおり　B：問ごとに1つずつ順番に（本文の番号が読めないPDF向け）
+export function bestAssign(items,map){
+  const count=Object.keys(map).length,orig=items.map(it=>it.slots.slice());
+  const score=()=>{const mx=Math.max(0,...items.flatMap(it=>it.slots));return items.filter(it=>it.ans).length*2-Math.abs(mx-count)*3;};
+  const run=reset=>{items.forEach((it,i)=>{it.slots=reset?[]:orig[i].slice();it.ans='';it.on=true;});attachAnswers(items,map);return score();};
+  const a=run(false);if(!count)return items;
+  const b=run(true);if(b>a)return items;
+  run(false);return items;
+}
 // 自動の手直し：解答番号が1つも入っていない区間は前の問の続き（図や選択肢）とみなしてつなぐ
 export function autoFix(items){
   const any=items.some(it=>it.slots.length);

@@ -216,7 +216,7 @@ const HOWTO={
   kphy:`<b>共テ物理 早押し</b>：力学・熱・波動・電磁気・原子の<b>法則・現象・力・物理量</b>を、少しずつ出るヒントから当てる早押し（全84問・すべて自作）。ヒントは分野 → 特徴 → 式・数値の順にはっきりしていく。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：力学→熱と波動→電磁気→原子→共テ総合。`,
   kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（理論・高分子66問＋物質の早押し問題、すべて自作）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
   kako:`<b>過去問 早押し</b>：自分で用意した共テ・センターの物理・化学のPDF（問題と正解）を<b>この端末に読み込み</b>、1問ずつ切り取って早押しにする。問題は<b>上から少しずつ見えていく</b>ので、解けた瞬間に解答番号（①〜⑨・⓪）を押す。<br>
-      <b>問題と正解はこの端末のブラウザの中だけに保存</b>され、サーバーやGitHubには送られない（過去問には著作権があるため）。友達と遊ぶときは、各自が同じPDFを読み込む。PDFを選ぶだけで、切り取り・正解の割り当て・保存まで自動で行う。`,
+      <b>問題と正解はこの端末のブラウザの中だけに保存</b>され、サーバーやGitHubには送られない（過去問には著作権があるため）。友達と遊ぶときは、ホストだけが読み込んでいればいい（参加者には遊んでいる間だけ画像が届く）。PDFを選ぶだけで、切り取り・正解の割り当て・保存まで自動で行う。`,
   quiz:`<b>早押しクイズ</b>：条件（ヒント）が少しずつ出るので、<b>どの物質か分かった瞬間に選択肢をタップ</b>。早いほど高得点、ただし間違えると早いほど大きく減点され、その問題にはもう答えられない（当てずっぽうは損）。<br>
       問題は組成・官能基・無機イオンモードの物質から165問。ヒントは「分類 → 反応・性質 → 化学式」の順にはっきりしていく。<br>
       <b>友達と遊ぶ</b>と全員で同じ問題を早押し（対戦は個人戦、協力はチームの合計点）。<b>段階を選べる</b>：気体と沈殿→無機→有機→沈殿と錯イオン→京大。`,
@@ -286,7 +286,7 @@ function tutorial(fromGame,g=SAVE.g){
     '問題の画像が<b>上から少しずつ見えていく</b>（全部見えてから75秒まで解ける）。',
     '解けたら下の<b>①〜⑨・⓪</b>を押す。解答番号が2つ以上ある問は、その数だけ順に押すと送られる（⌫で1つ戻す）。',
     '早く正解するほど高得点。間違えると減点で、<b>その問題にはもう答えられない</b>。',
-    '問題と正解はこの端末にだけ保存される。友達と遊ぶときは各自が同じPDFを読み込む（共通する問題だけが出る）。'].map((t,i)=>`<div class="step"><span class="n">${i+1}</span><div>${t}</div></div>`).join('')}</div>
+    '問題と正解はこの端末にだけ保存される。友達と遊ぶときは、ホストが読み込んでいれば参加者はPDF不要（その場で画像が届き、相手の端末には残らない）。'].map((t,i)=>`<div class="step"><span class="n">${i+1}</span><div>${t}</div></div>`).join('')}</div>
     <button class="btn go" data-ov="${fromGame?'tutgo':'close'}">${fromGame?'開始する':'わかった'}</button>`);return;}
   if(E.isQuiz(g)){overlay(`<h2>遊び方（${E.GAMES[g]}）</h2><div class="tut">${[
     '画面の上に<b>ヒント</b>が数秒ごとに1つずつ増え、だんだん答えに近づく（最後は式や化学式でほぼ答えになる）。',
@@ -366,6 +366,13 @@ function renderKakoBox(g){
     <p class="note">問題と正解はこの端末の中だけに保存され、サーバーやGitHubには送られない。</p>
     <div class="row-btns"><button class="btn go" data-kk="import">📄 PDFを読み込む</button>${KKSAVED.length?'<button class="btn sub" data-kk="manage">読み込んだ過去問</button>':''}</div></div>`;
 }
+// PDFを画面のどこにドロップしても読み込む（パソコン向け）
+document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')&&!(SES&&SES.role!=='solo')){e.preventDefault();}});
+document.addEventListener('drop',e=>{
+  const fs=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+  if(!fs.length||(SES&&SES.role!=='solo'&&view()&&view().running))return;e.preventDefault();
+  kakoImportDialog();kakoReadFiles(fs);
+});
 function kakoNeedOverlay(){overlay(`<h2>過去問がまだ無い</h2><p>共テ・センターの物理・化学の<b>問題PDFと正解PDF</b>を、この端末に読み込んでから遊ぶ。</p><div class="row-btns"><button class="btn go" data-kk="import">📄 PDFを読み込む</button><button class="btn sub" data-ov="close">閉じる</button></div>`,'kako');}
 const KKI={P:[],A:[],items:[]};      // 取り込み中のPDF・正解・問題
 function kakoImportDialog(){
@@ -391,7 +398,7 @@ async function kakoReadFiles(files){
     }
     for(const P of KKI.P){
       P.items=KK.autoFix(P.items);
-      KK.attachAnswers(P.items,KK.pickAnswers(P,KKI.A));
+      KK.bestAssign(P.items,KK.pickAnswers(P,KKI.A));
       P.items.forEach(it=>{it.P=P;it.adj={top:0,bottom:0};KKI.items.push(it);});
     }
     // 同じ年度・科目・大問・問が重なったら枝番を付けて分ける
@@ -656,8 +663,42 @@ function hostStep(){
   const ses=SES;if(!ses||!ses.S)return;
   const now=performance.now(),dt=Math.min(0.25,(now-ses.lastT)/1000);ses.lastT=now;
   E.tick(ses.S,dt);flushEvents();
+  if(ses.role==='host'&&ses.S.g==='kako')kakoShare(ses);
   if(ses.role==='host'&&((ses.dirty&&now-(ses.lastSnap||0)>=30)||now-(ses.lastSnap||0)>=250))sendSnaps();
   if(ses.S.over&&!ses.ended){ses.ended=true;onGameOver();}
+}
+/* 過去問の画像をその場で送る：今の問題（と次に出そうな問題）を、持っていない参加者にだけ小分けにして送る。
+   受け取った側は画面に出すだけで、端末には保存しない */
+const KCHUNK=48000;
+const b64=async blob=>{const u=new Uint8Array(await blob.arrayBuffer());let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);};
+function kakoShare(ses){
+  const q=ses.S.qz&&ses.S.qz.q;if(!q)return;
+  ses.kSent=ses.kSent||{};ses.kOut=ses.kOut||{};
+  for(const [cid,pid] of ses.cids){
+    const has=(ses.kk||{})[pid]||[],sent=ses.kSent[pid]||(ses.kSent[pid]=new Set());
+    if(!has.includes(q.k)&&!sent.has(q.k)){sent.add(q.k);kakoQueue(ses,cid,q.k);}
+    if(q.state==='done'&&sent.has(q.k)&&!(ses.kAns||(ses.kAns=new Set())).has(cid+'|'+q.k)){ses.kAns.add(cid+'|'+q.k);ses.net.send(cid,{t:'kans',k:q.k,ans:KK.KAKO.answer(q.k)});}
+    const out=ses.kOut[cid];if(out&&out.length)for(let n=0;n<2&&out.length;n++)ses.net.send(cid,out.shift());   // 1回に2つまで（ゲームの通信を詰まらせない）
+  }
+}
+async function kakoQueue(ses,cid,k){
+  const it=KKSAVED.find(x=>x.id===k),Q=KK.KAKO.Q[k];if(!it||!Q)return;
+  const meta={n:Q.n,subj:Q.subj,slots:Q.slots};   // 正解は送らない（解き終わってから送る）
+  const parts=[['q',it.img]].concat(it.lead&&it.useLead?[['lead',it.lead]]:[]);
+  const msgs=[];
+  for(const [part,blob] of parts){const d=await b64(blob),n=Math.ceil(d.length/KCHUNK);for(let i=0;i<n;i++)msgs.push({t:'kimg',k,part,i,n,np:parts.length,meta,d:d.slice(i*KCHUNK,(i+1)*KCHUNK)});}
+  if(SES!==ses)return;(ses.kOut[cid]=ses.kOut[cid]||[]).push(...msgs);
+}
+function kakoReceive(ses,m){
+  if(typeof m.k!=='string'||typeof m.d!=='string'||!(m.n>0&&m.n<400)||!['q','lead'].includes(m.part))return;
+  const box=ses.kin||(ses.kin={}),key=m.k+'|'+m.part,b=box[key]||(box[key]={got:0,c:[]});
+  if(b.c[m.i]===undefined){b.c[m.i]=m.d;b.got++;}
+  if(b.got<m.n)return;
+  const raw=atob(b.c.join('')),u=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i);
+  const url=URL.createObjectURL(new Blob([u],{type:'image/jpeg'}));delete box[key];
+  const B=KK.KAKO,im=B.img[m.k]||(B.img[m.k]={q:null,lead:null});im[m.part]=url;
+  if(!B.Q[m.k]&&m.meta){const sl=Math.min(9,Math.max(1,m.meta.slots|0));B.Q[m.k]={k:m.k,n:String(m.meta.n||''),cat:m.meta.subj,src:m.meta.subj,subj:m.meta.subj,clues:Array(KK.SLICES).fill(''),ans:'',slots:sl,shared:true};}
+  UI.qsig='';
 }
 function flushEvents(){
   const ses=SES;if(!ses||!ses.S||!ses.S.ev.length)return;
@@ -805,9 +846,9 @@ function hostStartGame(){
   const cfg=Object.assign({},ses.cfg,{players,weights:mergeWeights(ws)});
   if(cfg.g==='kako'){
     const st=E.stageById('kako',cfg.stageId),mine=cfg.stageId==='rv'?KK.KAKO.ALL:st.pool;
-    const common=mine.filter(k=>players.every(p=>p.id===ses.me||((ses.kk||{})[p.id]||[]).includes(k)));
-    if(common.length<3){toastLobby(`全員が読み込んでいる過去問が足りない（共通 ${common.length}問）。同じPDFを読み込んで`);return;}
-    cfg.pool=common;
+    // 問題はホストの端末にあるものを使い、持っていない人にはその場で画像を送る（相手の端末には保存しない）
+    if(!mine.length){toastLobby('ホストの端末に過去問が無い。ホストがPDFを読み込んで');return;}
+    cfg.pool=mine.slice();ses.kSent={};ses.kOut={};
   }
   if(cfg.stageId==='rv'){
     // 苦手ミックス：誰か1人でも★2以下の物質を集める
@@ -875,6 +916,8 @@ function clientOnMessage(ses,m){
       ses.V=reconcile(ses,cloneState(ses.base),m.ack|0);
       if(Array.isArray(m.ev))m.ev.forEach(handleEvent);
       break;
+    case 'kimg':kakoReceive(ses,m);break;
+    case 'kans':{const Q=KK.KAKO.Q[m.k];if(Q&&Q.shared&&typeof m.ans==='string'){Q.ans=m.ans.replace(/[^0-9]/g,'');UI.qsig='';}break;}
     case 'end':
       if(ses.ended)return;ses.ended=true;
       if(m.r)showResults(m.r);
@@ -1176,17 +1219,17 @@ function setQTop(){const G=$('game'),gr=G.getBoundingClientRect(),hb=G.querySele
 function renderKako(V){
   const Z=V.qz,q=Z&&Z.q,box=$('quizbox'),B=KK.KAKO;if(!q){if(box.innerHTML)box.innerHTML='';return;}
   box.classList.add('kk');
-  const mine=q.locked[me()],it=B.Q[q.k],im=B.img[q.k],slots=it?it.slots:1;
+  const mine=q.locked[me()],it=B.Q[q.k],im=B.img[q.k]&&B.img[q.k].q?B.img[q.k]:null,slots=it?it.slots:1;
   if(UI.kkq!==q.id){UI.kkq=q.id;UI.kkIn='';UI.kkScrolled=null;}
-  const sig=[q.id,q.state,q.by,JSON.stringify(q.locked),UI.kkIn].join('|');
+  const sig=[q.id,q.state,q.by,JSON.stringify(q.locked),UI.kkIn,!!im,im&&im.lead].join('|');
   if(UI.qsig!==sig){
     UI.qsig=sig;setQTop();
     const who=q.by?(q.by===me()?'あなた':esc(V.players[q.by].name)):'';
     const done=q.state==='done',ov=box.querySelector('.kk-view'),keep=ov&&UI.kkScrolled===q.id?ov.scrollTop:null;
     box.innerHTML=`<div class="qz-head"><b>第${q.no}問</b><span>／${Z.total}</span><span class="qz-val">${q.state==='open'?(mine?'この問題はもう答えられない':`今答えると <b>+${E.quizGain(q)}</b>　まちがえると −${E.quizLoss(q)}`):''}</span></div>
-      <div class="kk-view">${im?`${im.lead?`<img class="kk-lead" src="${im.lead}" alt="">`:''}<div class="kk-paper"><img src="${im.q}" alt=""><div class="kk-shutter" data-shut></div></div>`:'<p class="kk-miss">この問題はこの端末に読み込まれていない（同じPDFを読み込むと見える）</p>'}</div>
+      <div class="kk-view">${im?`${im.lead?`<img class="kk-lead" src="${im.lead}" alt="">`:''}<div class="kk-paper"><img src="${im.q}" alt=""><div class="kk-shutter" data-shut></div></div>`:`<p class="kk-miss">${SES&&SES.role==='client'?'ホストから問題を受け取り中…':'この問題の画像がこの端末に無い'}</p>`}</div>
       <div class="kk-label">${it?esc(it.n):''}${slots>1?`　<b>解答番号${slots}つ</b>`:''}</div>
-      ${done?`<div class="qz-res ${q.by?'ok':'ng'}">${q.by?`${who} が正解`:'正解者なし'}：<b>${esc(B.answer(q.k).split('').map(d=>'⓪①②③④⑤⑥⑦⑧⑨'[+d]).join(' '))}</b></div>`:''}
+      ${done?`<div class="qz-res ${q.by?'ok':'ng'}">${q.by?`${who} が正解`:'正解者なし'}${B.answer(q.k)?'：':''}<b>${esc(B.answer(q.k).split('').map(d=>'⓪①②③④⑤⑥⑦⑧⑨'[+d]).join(' '))}</b></div>`:''}
       <div class="kk-in">${Array.from({length:slots},(_,i)=>`<span class="${i<UI.kkIn.length?'on':''}">${i<UI.kkIn.length?'⓪①②③④⑤⑥⑦⑧⑨'[+UI.kkIn[i]]:''}</span>`).join('')}${mine&&q.state==='open'?`<em>✗ ${esc(mine)}</em>`:''}</div>
       <div class="kk-pad">${'1234567890'.split('').map(d=>`<button data-kd="${d}" ${done||mine?'disabled':''}>${'⓪①②③④⑤⑥⑦⑧⑨'[+d]}</button>`).join('')}${slots>1?`<button data-kd="bs" ${done||mine||!UI.kkIn?'disabled':''}>⌫</button>`:''}</div>`;
     if(keep!=null&&box.querySelector('.kk-view'))box.querySelector('.kk-view').scrollTop=keep;

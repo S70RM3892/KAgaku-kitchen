@@ -482,7 +482,7 @@ function answerQuiz(S,pid,P,c){
     P.score+=pts;P.pts+=pts;P.served++;P.combo++;P.maxCombo=Math.max(P.maxCombo,P.combo);
     if(!vs){S.team.score+=pts;S.team.served++;S.team.combo++;S.team.maxCombo=Math.max(S.team.maxCombo,S.team.combo);}
     S.log.push({k:q.k,ok:true,hinted:false,by:pid,mode:'name',ci:q.shown});
-    emit(S,pid,{h:`正解 +${pts}<small>${nm}（ヒント${q.shown}つ目で）</small>`,k:'ok',s:'ok',m:[q.k,'ok']});
+    emit(S,pid,{h:`正解 +${pts}<small>${nm}（${S.g==='kako'?`${Math.round(Math.min(1,q.shown/q.clues.length)*100)}%見えた時点で`:`ヒント${q.shown}つ目で`}）</small>`,k:'ok',s:'ok',m:[q.k,'ok']});
     S.order.filter(x=>x!==pid).forEach(x=>emit(S,x,{h:`<b>${P.name}</b> が正解 +${pts}<small>${nm}</small>`,k:vs?'ng':'ok',s:vs?'snipe':'ok'}));
     endQuiz(S,pid);
     return;
