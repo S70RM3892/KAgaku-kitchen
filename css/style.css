@@ -830,3 +830,26 @@ body.ui-port .ptable.rx.parts .half .cell .sym{transform:none}
 .pin.seq .chip{border-bottom:3px solid var(--dc,transparent)}
 .pin.seq .arr{font-style:normal;font-weight:800;opacity:.5;margin:0 -1px}
 .card .clue u.blank{display:inline-block;min-width:3em;border-bottom:2px solid var(--ink);text-decoration:none}
+
+/* =================== 早押しクイズ =================== */
+.quizbox{display:none}
+body.quiz-on #game .orders,body.quiz-on #game .actbar,body.quiz-on #game .half{visibility:hidden}
+body.quiz-on #game .quizbox{display:flex;flex-direction:column;gap:8px;position:absolute;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:var(--qtop,56px);bottom:max(8px,env(safe-area-inset-bottom));
+  max-width:760px;margin:0 auto;z-index:5}
+.qz-head{display:flex;align-items:baseline;gap:4px;color:#fff;font-weight:800}
+.qz-head b{font-family:var(--font-display);font-weight:400;font-size:20px;color:var(--ticket)}
+.qz-val{margin-left:auto;font-size:12px;color:#cfe3e8}.qz-val b{color:var(--cool);font-size:15px}
+.qz-clues{flex:1 1 auto;min-height:0;overflow:auto;margin:0;padding:8px 10px 8px 34px;background:var(--ticket);color:var(--ink);border:3px solid var(--ink);border-radius:12px;
+  font-weight:800;font-size:calc(15px*var(--fsk));line-height:1.45;display:flex;flex-direction:column;gap:4px}
+.qz-clues li.new{animation:pop .3s}
+.qz-clues li.next{list-style:none;height:6px;background:#0002;border-radius:3px;overflow:hidden;margin-top:2px}
+.qz-clues li.next i{display:block;height:100%;background:var(--hot);transform-origin:left;transform:scaleX(0)}
+.qz-res{padding:6px 10px;border-radius:10px;border:3px solid var(--ink);font-weight:800;color:var(--ink)}
+.qz-res.ok{background:var(--cool)}.qz-res.ng{background:#ffd9cc}
+.qz-ch{flex:0 0 auto;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qz-ch button{border:3px solid var(--ink);border-radius:12px;background:#fff;color:var(--ink);font-family:inherit;font-weight:800;font-size:calc(15px*var(--fsk));padding:12px 6px;min-height:52px;box-shadow:0 3px 0 var(--ink);touch-action:manipulation}
+.qz-ch button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.qz-ch button:disabled{opacity:.55;box-shadow:none}
+.qz-ch button.right{background:var(--cool);opacity:1}
+.qz-ch button.wrong{background:var(--hot);color:#fff;opacity:1}
+@media (min-width:700px){.qz-ch{grid-template-columns:repeat(3,1fr)}}
