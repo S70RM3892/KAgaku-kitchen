@@ -917,3 +917,5 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .kk-range select{font:inherit;border:2px solid var(--ink);border-radius:6px;background:#fff;color:var(--ink);padding:2px}
 .kk-dl{flex-wrap:wrap}
 .kk-how{margin:6px 0;font-size:13px}.kk-how summary{font-weight:800;cursor:pointer}.kk-how ol{padding-left:1.3em;margin:4px 0;line-height:1.6}
+.kk-auto{background:#fff6d6;border:2px solid var(--ink);border-radius:10px;padding:8px 10px;margin:6px 0}
+.kk-auto-h{font-weight:800;font-size:13px}.kk-auto-h b.ok{color:#178a4f}

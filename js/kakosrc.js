@@ -60,7 +60,7 @@ export function lookup(name,size){
   return MAP[n]||(size&&SIZE[size])||null;
 }
 // 自分の端末で一括保存するためのURL一覧とコマンド（配布元から各自が直接ダウンロードする。こちらでは中継しない）
-export const pick=(from,to,subjs)=>CATALOG.filter(c=>c.year>=from&&c.year<=to&&subjs.includes(c.subj));
+export const pick=(from,to,subjs)=>CATALOG.filter(c=>c.year>=from&&c.year<=to&&subjs.includes(c.subj)).sort((a,b)=>b.year-a.year||(a.subj<b.subj?1:-1));   // 新しい年度から
 export const urlList=list=>list.flatMap(c=>[c.q,c.a]).join('\n');
 export const cmdUnix=list=>`mkdir -p kakomon && cd kakomon && for u in ${list.flatMap(c=>[c.q,c.a]).map(u=>"'"+u+"'").join(' ')}; do curl -fsSLO "$u"; sleep 1; done`;
 // Android：Termux（F-Droid 版）で実行する。初回は保存の許可を求め、許可されるまで待つ。「ダウンロード」の kakomon フォルダに保存する

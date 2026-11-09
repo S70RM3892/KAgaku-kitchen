@@ -360,7 +360,13 @@ function tutorialI(fromGame){
 }
 
 /* ================= 過去問の読み込み（端末の中だけで処理） ================= */
-KK.loadAll().then(items=>{KKSAVED=items;if(CUR==='title')renderTitle();});
+KK.loadAll().then(items=>{KKSAVED=items;if(CUR==='title')renderTitle();
+  // 中継から開かれたとき（?kkauto=1）：過去問の取り込み画面を開き、中継がつながりしだい自動で取り込む
+  if(new URLSearchParams(location.search).has('kkauto')){
+    history.replaceState(null,'',location.pathname);
+    SAVE.g='kako';persist();if(CUR==='title')renderTitle();kakoImportDialog();UI.kkAutoPending=true;relayWatch();
+  }
+});
 function renderKakoBox(g){
   const el=$('kakoBox');if(!el)return;
   if(g!=='kako'){el.innerHTML='';el.style.display='none';return;}
@@ -382,18 +388,30 @@ const KKI={P:[],A:[],items:[]};      // 取り込み中のPDF・正解・問題
 function kakoImportDialog(){
   overlay(`<h2>過去問のPDFを読み込む</h2>
     <p>大学入試センターの<b>問題PDFと正解PDF</b>（物理・化学、何年分でも）をまとめて選ぶ。年度・科目・どの正解がどの問題のものかは自動で判断する。</p>
-    <div class="row-btns"><label class="btn go kk-file">ファイルを選ぶ<input type="file" id="kkFiles" accept="application/pdf,.pdf" multiple hidden></label>
-    <label class="btn sub kk-file kk-dir">フォルダごと<input type="file" id="kkDir" webkitdirectory multiple hidden></label></div>
-    <p class="note">選ぶだけで、切り取り・正解の割り当て・保存まで全部自動で行う。スキャンしたPDF（画像だけのPDF）は文字を読み取るので、1科目1分ほどかかる。</p>
-    <details class="kk-get"><summary>📥 過去問のPDFを手に入れる（2004〜2026年度）</summary>
-      <p class="note">配布元はブラウザから直接取り込むことを許していないので、<b>自分の端末</b>でまとめて保存してから選ぶ。
-      ファイル名や大きさで年度・科目を自動で見分ける。出どころ：<a href="${KSRC.SOURCE}" target="_blank" rel="noopener">日本の学校「大学入学共通テスト問題＆解答」</a></p>
+    <div class="kk-auto">
+      <div class="kk-auto-h">⚡ 全自動（この端末の中継を使う）：<span id="kkRelaySt">中継を探している…</span></div>
       <div class="kk-range">
         <select data-kr="from">${[...new Set(KSRC.CATALOG.map(c=>c.year))].sort((a,b)=>b-a).map(y=>`<option ${y===2021?'selected':''}>${y}</option>`).join('')}</select>〜
         <select data-kr="to">${[...new Set(KSRC.CATALOG.map(c=>c.year))].sort((a,b)=>b-a).map(y=>`<option>${y}</option>`).join('')}</select>年度
         <label><input type="checkbox" data-kr="phy" checked>物理</label><label><input type="checkbox" data-kr="chem" checked>化学</label>
         <span id="kkCount" class="note"></span>
       </div>
+      <div class="row-btns"><button class="btn go" data-kauto disabled>まだ無い年度を全部取り込む</button><button class="btn sub" data-kstop hidden>止める</button></div>
+      <details class="kk-how"><summary>中継を起動（Android・パソコン。コマンドを1回貼るだけ）</summary>
+        <p class="note">コピーしたコマンドを、Android は「Termux」（F-Droid 版）、Mac は「ターミナル」、Windows は「PowerShell」（Python が必要）に貼り付けて Enter。
+        中継が起動するとこのページが開き、<b>まだ無い年度を自動で取り込み始める</b>。中継はこの端末の中だけで動き、配布元の過去問PDFだけを受け取ってこのページに渡す（保存はしない）。
+        パソコンは Chrome か Firefox で（Safari は端末の中の中継につながれない）。Chrome は最初に「ローカルネットワークへのアクセス」を聞くので「許可」。</p>
+        <div class="row-btns kk-dl"><button class="btn sub mini" data-krelay="android">Android用をコピー</button><button class="btn sub mini" data-krelay="unix">Mac用をコピー</button><button class="btn sub mini" data-krelay="win">Windows用をコピー</button></div>
+        <p class="note" id="kkRelayMsg"></p>
+        <p class="note">iPhone・iPad は中継を動かせないので、下の「ショートカット」で保存してから選ぶ。</p>
+      </details>
+    </div>
+    <div class="row-btns"><label class="btn go kk-file">ファイルを選ぶ<input type="file" id="kkFiles" accept="application/pdf,.pdf" multiple hidden></label>
+    <label class="btn sub kk-file kk-dir">フォルダごと<input type="file" id="kkDir" webkitdirectory multiple hidden></label></div>
+    <p class="note">選ぶだけで、切り取り・正解の割り当て・保存まで全部自動で行う。スキャンしたPDF（画像だけのPDF）は文字を読み取るので、1科目1分ほどかかる。</p>
+    <details class="kk-get"><summary>📥 過去問のPDFを手に入れる（2004〜2026年度）</summary>
+      <p class="note">配布元はブラウザから直接取り込むことを許していないので、<b>自分の端末</b>でまとめて保存してから選ぶ。
+      ファイル名や大きさで年度・科目を自動で見分ける。出どころ：<a href="${KSRC.SOURCE}" target="_blank" rel="noopener">日本の学校「大学入学共通テスト問題＆解答」</a></p>
       <div class="row-btns kk-dl">
         <button class="btn sub mini" data-kdl="urls">URL一覧をコピー</button>
         <button class="btn sub mini" data-kdl="android">Android用コマンドをコピー</button>
@@ -430,7 +448,7 @@ function kakoImportDialog(){
     <p class="note" id="kkMsg">読み込みはこの端末の中だけで行う。</p>
     <div class="row-btns"><button class="btn sub" data-ov="close">やめる</button></div>`,'kakoimp');
   $('kkFiles').addEventListener('change',e=>kakoReadFiles([...e.target.files]));
-  kakoDlCount();
+  kakoDlCount();relayWatch();
   const dir=$('kkDir');if(!('webkitdirectory' in dir))dir.parentElement.remove();else dir.addEventListener('change',e=>kakoReadFiles([...e.target.files]));
 }
 // 自分の端末で一括保存するための一覧（年度の範囲・科目を選ぶ）
@@ -442,6 +460,12 @@ function kakoDlPick(){
 function kakoDlCount(){const el=$('kkCount');if(el){const l=kakoDlPick();el.textContent=`${l.length*2}ファイル`;}}
 document.addEventListener('change',e=>{if(e.target.closest('[data-kr]'))kakoDlCount();});
 document.addEventListener('click',async e=>{
+  if(e.target.closest('[data-kauto]')){kakoAutoImport();return;}
+  if(e.target.closest('[data-kstop]')){if(AUTO_RUN)AUTO_RUN.stop=true;const m=$('kkMsg');if(m)m.textContent='今の組が終わったら止める…';return;}
+  const rb=e.target.closest('[data-krelay]');
+  if(rb){const t=relayCmd[rb.dataset.krelay]();let ok=false;try{await navigator.clipboard.writeText(t);ok=true;}catch(err){}
+    if(!ok){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy');}catch(err){}ta.remove();}
+    const m=$('kkRelayMsg');if(m)m.textContent=ok?'中継の起動コマンドをコピーした':'コピーできなかった';return;}
   const b=e.target.closest('[data-kdl]');if(!b)return;
   const l=kakoDlPick(),msg=$('kkDlMsg');if(!l.length){if(msg)msg.textContent='年度と科目を選ぶ';return;}
   const k=b.dataset.kdl,t=k==='urls'?KSRC.urlList(l):k==='unix'?KSRC.cmdUnix(l):k==='android'?KSRC.cmdAndroid(l):KSRC.cmdWin(l);
@@ -449,16 +473,42 @@ document.addEventListener('click',async e=>{
   if(!ok){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy');}catch(err){}ta.remove();}
   if(msg)msg.textContent=ok?`コピーした（${l.length*2}ファイル分）`:'コピーできなかった。長押しで選んでコピーして';
 });
-async function kakoReadFiles(files){
-  const msg=$('kkMsg');
+// 選んだPDFを読み込む。年度・科目ごとに分けて1組ずつ読み、保存してからメモリを空ける（何十年分でも重くならない）
+async function kakoReadFiles(files,opt={}){
   files=files.filter(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+  const groups=new Map();
+  for(const f of files){const L=KSRC.lookup(f.name,f.size),k=L?L.year+'-'+L.subj:'?';(groups.get(k)||groups.set(k,[]).get(k)).push(f);}
+  const all=[],bad=[];let gi=0;
+  for(const fs of groups.values()){
+    gi++;if(opt.stop&&opt.stop())break;
+    const r=await kakoReadGroup(fs,groups.size>1?`[${gi}/${groups.size}] `:'',groups.size===1&&!opt.quiet);
+    if(r.err)bad.push(r.err);else all.push(...r.recs);
+  }
+  if(!opt.quiet)import('./ocr.js').then(O=>O.ocrDone()).catch(()=>{});
+  if(opt.quiet)return {recs:all,bad};
+  kakoSummary(all,bad,groups.size===1);
+}
+function kakoSummary(all,bad,canReview){
+  const msg=$('kkMsg');
+  if(!all.length){if(msg)msg.textContent=bad.length?bad.join(' / '):'問題が見つからなかった。問題PDFも選ぶ';return;}
+  const by={};all.forEach(r=>{const k=r.year+' '+KK.subjName(r.subj);by[k]=by[k]||{n:0,ok:0};by[k].n++;if(r.on&&r.ans)by[k].ok++;});
+  const ng=all.filter(r=>!r.ans).length;
+  overlay(`<h2>読み込み完了</h2><p>自動で切り取り・正解の割り当て・保存まで終えた。</p>
+    <div class="kk-sum">${Object.entries(by).sort().map(([k,v])=>`<div><b>${esc(k)}</b>　${v.ok}問${v.ok<v.n?`<small>（正解が読めず出題しない ${v.n-v.ok}問）</small>`:''}</div>`).join('')}</div>
+    ${bad.length?`<p class="note">読めなかったもの：${esc(bad.join(' / '))}</p>`:''}
+    ${ng?`<p class="note">正解が読めなかった問は出題しない（正解PDFも一緒に選ぶと出題できることがある）。</p>`:''}
+    <div class="row-btns"><button class="btn go" data-ov="close">遊ぶ</button>${canReview?'<button class="btn sub" data-kk="review">切り取りを確認・手直し</button>':''}</div>`,'kakodone');
+}
+let KKGEN=0;   // 時間切れであきらめた組の続きが、次の組の邪魔をしないための番号
+async function kakoReadGroup(files,tag,keep){
+  const msg=$('kkMsg'),gen=++KKGEN,alive=()=>{if(gen!==KKGEN)throw new Error('あきらめた');};
   KKI.P=[];KKI.A=[];KKI.items=[];KKI.drop=[];
   try{
     for(const [i,f] of files.entries()){
-      if(msg)msg.textContent=`読み込み中… ${i+1} / ${files.length}：${f.name}`;
-      const prog=t=>{if(msg)msg.textContent=`${i+1} / ${files.length}　${t}`;};
-      const P=await KK.parseProblemPdf(f,prog);
-      if(P.meta.isAns||!P.items.length){const A=await KK.parseAnswerPdf(f,prog,P);if(A.count)KKI.A.push(A);}else KKI.P.push(P);
+      if(msg)msg.textContent=`${tag}読み込み中… ${i+1} / ${files.length}：${f.name}`;
+      const prog=t=>{if(msg)msg.textContent=`${tag}${i+1} / ${files.length}　${t}`;};
+      const P=await KK.parseProblemPdf(f,prog);alive();
+      if(P.meta.isAns||!P.items.length){const A=await KK.parseAnswerPdf(f,prog,P);alive();if(A.count)KKI.A.push(A);}else KKI.P.push(P);
     }
     for(const P of KKI.P){
       KK.assignAll(P,KKI.A);
@@ -467,21 +517,81 @@ async function kakoReadFiles(files){
     // 同じ年度・科目・大問・問が重なったら枝番を付けて分ける
     const seen={};KKI.items.forEach(it=>{const k=KK.itemId(it);if(seen[k]){it.part=String(++seen[k]);}else seen[k]=1;});
     for(const [i,it] of KKI.items.entries()){
-      if(msg&&i%3===0)msg.textContent=`切り取り中… ${i+1} / ${KKI.items.length}`;
+      if(msg&&i%3===0)msg.textContent=`${tag}切り取り中… ${i+1} / ${KKI.items.length}`;
       it.img=await KK.renderSeg(it.P,it.seg,it.adj);
-      it.leadImg=it.lead?await KK.renderSeg(it.P,it.lead):null;
+      it.leadImg=it.lead?await KK.renderSeg(it.P,it.lead):null;alive();
     }
-  }catch(err){if(msg)msg.textContent='読み込めなかった：'+(err&&err.message||err);return;}
-  import('./ocr.js').then(O=>O.ocrDone()).catch(()=>{});
-  if(!KKI.items.length){if(msg)msg.textContent=`問題が見つからなかった（正解PDF ${KKI.A.length}件）。問題PDFも選ぶ`;return;}
-  // そのまま自動で保存する（手直しはあとから「読み込んだ過去問」でできる）
+  }catch(err){return {err:files.map(f=>f.name).join('・')+'：'+(err&&err.message||err)};}
+  if(gen!==KKGEN)return {recs:[]};
+  if(!KKI.items.length)return {recs:[]};
   const recs=await kakoSave();
-  const by={};recs.forEach(r=>{const k=r.year+' '+KK.subjName(r.subj);by[k]=by[k]||{n:0,ok:0};by[k].n++;if(r.on&&r.ans)by[k].ok++;});
-  const ng=recs.filter(r=>!r.ans).length;
-  overlay(`<h2>読み込み完了</h2><p>自動で切り取り・正解の割り当て・保存まで終えた。</p>
-    <div class="kk-sum">${Object.entries(by).sort().map(([k,v])=>`<div><b>${esc(k)}</b>　${v.ok}問${v.ok<v.n?`<small>（正解が読めず出題しない ${v.n-v.ok}問）</small>`:''}</div>`).join('')}</div>
-    ${ng?`<p class="note">正解PDFも一緒に選ぶと、正解が読めなかった問も出題できる。</p>`:''}
-    <div class="row-btns"><button class="btn go" data-ov="close">遊ぶ</button><button class="btn sub" data-kk="review">切り取りを確認・手直し</button></div>`,'kakodone');
+  // 次の組を読む前に、描いたページの絵とPDFを手放す（手直し画面で使う1組だけは残す）
+  if(!keep){for(const P of KKI.P){P.pages.forEach(p=>{p.canvas=null;});try{P.doc.destroy();}catch(e){}}KKI.items=[];KKI.P=[];}
+  return {recs};
+}
+
+/* ===== 全自動：この端末で動かす中継（tools/kk-relay.py）を通して配布元からPDFを受け取る ===== */
+const RELAY='http://127.0.0.1:8930';
+const RELAY_PY=()=>new URL('tools/kk-relay.py',location.href).href;
+const APP_URL=()=>location.origin+location.pathname;
+const relayCmd={
+  android:()=>`command -v python >/dev/null || pkg install -y python; command -v curl >/dev/null || pkg install -y curl; curl -fsSL '${RELAY_PY()}' -o ~/kk-relay.py && python ~/kk-relay.py '${APP_URL()}'`,
+  unix:()=>`curl -fsSL '${RELAY_PY()}' -o ~/kk-relay.py && python3 ~/kk-relay.py '${APP_URL()}'`,
+  win:()=>`Invoke-WebRequest '${RELAY_PY()}' -OutFile $HOME\\kk-relay.py; py $HOME\\kk-relay.py '${APP_URL()}'`,
+};
+async function relayPing(){
+  try{const ac=new AbortController();setTimeout(()=>ac.abort(),1500);
+    const r=await fetch(RELAY+'/ping',{cache:'no-store',signal:ac.signal});return r.ok&&!!(await r.json()).ok;}catch(e){return false;}
+}
+async function relayGet(u){
+  const r=await fetch(RELAY+'/get?u='+encodeURIComponent(u),{cache:'no-store'});
+  if(r.status===429){const e=new Error('配布元にことわられた（時間をおいてから。急ぐなら下の「1つずつ開いて保存する」）');e.refused=true;throw e;}
+  if(!r.ok)throw new Error('中継から受け取れなかった（'+r.status+'）');
+  return new File([await r.blob()],u.split('/').pop(),{type:'application/pdf'});
+}
+const kakoHave=(y,subj)=>KKSAVED.some(it=>it.year===y&&it.subj===subj);
+let AUTO_RUN=null;
+const wait=ms=>new Promise(res=>setTimeout(res,ms)),GROUP_LIMIT=6*60*1000;
+function relayWatch(){
+  clearTimeout(UI.relayIv);
+  const tick=async()=>{
+    if(OVK!=='kakoimp')return;
+    const ok=await relayPing();
+    const st=$('kkRelaySt'),b=document.querySelector('[data-kauto]');
+    if(st)st.innerHTML=ok?'<b class="ok">中継につながった</b>':'中継が動いていない（下の「中継を起動」）';
+    if(b)b.disabled=!ok||!!AUTO_RUN;
+    if(ok&&UI.kkAutoPending){UI.kkAutoPending=false;kakoAutoImport();}
+    // 見つからない間はゆっくり（5秒おき）、中継から開かれたときは早め（1秒おき）に探す
+    clearTimeout(UI.relayIv);UI.relayIv=setTimeout(tick,ok||UI.kkAutoPending?1000:5000);
+  };
+  tick();
+}
+// まだこの端末に無い年度・科目を、新しい年度から順に、1組ずつ「受け取る → 読み込む → 保存」していく
+async function kakoAutoImport(){
+  if(AUTO_RUN)return;
+  const list=kakoDlPick().filter(c=>!kakoHave(c.year,c.subj));
+  const msg=$('kkMsg');
+  if(!list.length){if(msg)msg.textContent='選んだ範囲はもう全部この端末にある。範囲を広げる';return;}
+  AUTO_RUN={stop:false};const run=AUTO_RUN;
+  const b=document.querySelector('[data-kauto]');if(b)b.disabled=true;
+  const sb=document.querySelector('[data-kstop]');if(sb)sb.hidden=false;
+  const all=[],bad=[];
+  try{
+    for(const [i,c] of list.entries()){
+      if(run.stop)break;
+      const tag=`[${i+1}/${list.length}] ${c.year} ${KK.subjName(c.subj)}：`;
+      if(msg)msg.textContent=tag+'配布元から受け取り中…';
+      let files;
+      try{files=[await relayGet(c.q)];await wait(2000);files.push(await relayGet(c.a));}
+      catch(e){bad.push(`${c.year} ${KK.subjName(c.subj)}：${e.message}`);if(e.refused)break;continue;}   // ことわられたら、それ以上は頼まない
+      // 1組に時間がかかりすぎたら（読み取りが進まないなど）、その組はあきらめて次へ
+      const r=await Promise.race([kakoReadFiles(files,{quiet:true,stop:()=>run.stop}),wait(GROUP_LIMIT).then(()=>null)]);
+      if(!r){KKGEN++;bad.push(`${c.year} ${KK.subjName(c.subj)}：時間がかかりすぎたので飛ばした`);await import('./ocr.js').then(O=>O.ocrDone()).catch(()=>{});continue;}
+      all.push(...r.recs);bad.push(...r.bad);
+      await wait(2000);   // 配布元に負担をかけないよう間をあける
+    }
+  }finally{AUTO_RUN=null;import('./ocr.js').then(O=>O.ocrDone()).catch(()=>{});}
+  kakoSummary(all,bad.concat(run.stop?['途中で止めた']:[]),false);
 }
 // 取り込み中の問題を端末に保存する（手直しで年度や番号を変えたときは、前のIDのものを消してから入れ直す）
 async function kakoSave(){
