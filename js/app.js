@@ -6,6 +6,7 @@ import * as I from './ion.js';
 import {ROOTM,SYNM,WORDM} from './eng.js';
 import * as QZ from './quiz.js';
 import * as KK from './kakomon.js';
+import * as RK from './rank.js';
 import * as E from './engine.js';
 import {HostNet,ClientNet,PROTO,normCode} from './net.js';
 const {COLORS,STAMPS}=E;
@@ -193,6 +194,8 @@ const colorOf=(V,pid)=>{const P=V&&V.players[pid];return COLORS[P?P.slot%4:0];};
 function starsFor(st,score){if(!st.stars)return 0;return st.stars.filter(t=>score>=t).length;}
 // 忙しさごとにベストを分けて記録（ふつうは従来どおりステージIDそのまま）
 const busyKey=(id,b)=>(b|0)===2||!b?id:`${id}@${b}`;
+const rankKey=(g,id,b,coef)=>`${id}@${b|0||2}${g==='rx'&&coef?'+c':''}`;
+const rankOn=()=>SAVE.ui.rank!==false;
 const scaledStars=(st,b)=>st.stars?st.stars.map(x=>Math.round(x*E.busyOf(b).star/10)*10):null;
 function unlocked(i,g=SAVE.g){
   if(i===0||isParts(g)||E.isQuiz(g))return true;const p=stagesOf(g)[i-1];
@@ -486,6 +489,39 @@ function kakoManage(){
     <div class="kk-list">${rows}</div><div class="row-btns"><button class="btn go" data-ov="close">閉じる</button></div>`,'kakomanage');
 }
 $('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');if(!b)return;if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
+
+/* ================= 全国ランキング ================= */
+const RKV={g:'rx',st:'s1',days:7};
+function rankOverlay(g,st,days){
+  if(OVK==='result')RKV.back={html:$('ovPanel').innerHTML};else if(OVK!=='rank')RKV.back=null;
+  if(g)RKV.g=g;if(st)RKV.st=st;if(days!=null)RKV.days=days;
+  if(!RK.ranked(RKV.g,'s1'))RKV.g='rx';
+  const ST=stagesOf(RKV.g).filter(x=>RK.ranked(RKV.g,x.id));if(!ST.some(x=>x.id===RKV.st))RKV.st=ST[0].id;
+  const key=rankKey(RKV.g,RKV.st,SAVE.busy,SAVE.coef);
+  const modes=[...RK.RANKED].map(x=>`<option value="${x}" ${x===RKV.g?'selected':''}>${esc(E.GAMES[x])}</option>`).join('');
+  overlay(`<h2>🏆 全国ランキング</h2>
+    <div class="rk-ctl"><select data-rk="g">${modes}</select>
+      <select data-rk="st">${ST.map(x=>`<option value="${x.id}" ${x.id===RKV.st?'selected':''}>${esc(x.lvl+' '+x.name)}</option>`).join('')}</select></div>
+    <div class="seg rk-per"><button data-rkd="7" class="${RKV.days===7?'on':''}">今週</button><button data-rkd="0" class="${RKV.days===0?'on':''}">全期間</button></div>
+    <p class="note">忙しさ「${E.busyOf(SAVE.busy).name}」${RKV.g==='rx'&&SAVE.coef?'・係数判定ON':''}のソロの点数（1人1つ、自己ベスト）。忙しさはタイトル画面で切り替え。</p>
+    <div class="rank" id="rkList"><p class="note">読み込み中…</p></div>
+    <div class="row-btns">${RKV.back?'<button class="btn go" data-rkback="1">結果に戻る</button>':'<button class="btn go" data-ov="close">閉じる</button>'}</div>`,'rank');
+  const want=[RKV.g,key,RKV.days].join('|');
+  RK.top(RKV.g,key,RKV.days).then(rows=>{
+    const el=$('rkList');if(!el||OVK!=='rank'||[RKV.g,rankKey(RKV.g,RKV.st,SAVE.busy,SAVE.coef),RKV.days].join('|')!==want)return;
+    if(!Array.isArray(rows)||!rows.length){el.innerHTML='<p class="note">まだ誰もいない。一番乗りしろ。</p>';return;}
+    el.innerHTML=rows.map((x,i)=>`${i&&x.rank-rows[i-1].rank>1?'<div class="rk-gap">…</div>':''}<div class="rk${x.me?' me':''}" style="--pc:${x.rank===1?'#e0a100':x.rank===2?'#9aa8ae':x.rank===3?'#b8743a':'#3c5560'}">
+      <div class="no">${x.rank<=3?['🥇','🥈','🥉'][x.rank-1]:x.rank}</div><div><div class="nm">${esc(x.name)}${x.me?'（あなた）':''}</div><div class="sub">${new Date(x.at).toLocaleDateString('ja-JP')}</div></div><div class="sc">${x.score}</div></div>`).join('');
+  }).catch(err=>{const el=$('rkList');if(el)el.innerHTML=`<p class="note">読み込めなかった（${esc(String(err&&err.message||err).slice(0,60))}）</p>`;});
+}
+$('ov').addEventListener('change',e=>{const t=e.target.closest('[data-rk]');if(!t||OVK!=='rank')return;
+  if(t.dataset.rk==='g')rankOverlay(t.value,null,null);else rankOverlay(null,t.value,null);});
+$('ov').addEventListener('click',e=>{
+  if(e.target.closest('[data-rkback]')&&RKV.back){overlay(RKV.back.html,'result');RKV.back=null;return;}
+  const d=e.target.closest('[data-rkd]');if(d&&OVK==='rank'){rankOverlay(null,null,+d.dataset.rkd);return;}
+  const b=e.target.closest('[data-rank]');if(b){const [g,st]=b.dataset.rank.split('|');rankOverlay(g,st,7);}
+});
+$('btnRank').addEventListener('click',()=>{audio();const g=GK(SAVE.g);rankOverlay(RK.ranked(g,'s1')?g:'rx',null,7);});
 
 /* ================= 図鑑 ================= */
 function renderDex(){
@@ -1926,6 +1962,7 @@ $('stamps').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if
 
 /* ================= 設定（自分で選べるUI） ================= */
 const SETTINGS=[
+  {k:'rank',t:'全国ランキングに参加',d:'ソロの点数を、タイトル画面の名前で公開ランキングに送る（本名は避けろ）',o:[[true,'ON'],[false,'OFF']]},
   {k:'auto',t:'自動精製',d:'必要なものがそろったら自動で反応させる（ソロ用。マルチプレイはロビーでホストが決める）',o:[[false,'OFF'],[true,'ON']]},
   {k:'orient',t:'画面の向き',d:'自動：持ち方に合わせて切り替わる。縦持ち：上に客の列、下に棚（周期表は1〜9族／10〜18族の上下2段）、操作ボタンは親指の届く位置',o:[['auto','自動'],['land','横持ち'],['port','縦持ち']]},
   {k:'layout',t:'横持ちの棚の配置',d:'左右に分割：周期表を1〜9族と10〜18族に分けて両端に置き、中央に客の列。下にまとめる：タブレット向け',o:[['split','左右に分割'],['bottom','下にまとめる']]},
@@ -1945,7 +1982,7 @@ function applyUI(){
   applyOrient();
 }
 function openSettings(back){
-  UI.setBack=back||null;
+  UI.setBack=back||null;if(SAVE.ui.rank===undefined)SAVE.ui.rank=true;
   const rows=SETTINGS.map(x=>`<div class="set-row"><div class="set-t"><b>${x.t}</b>${x.d?`<small>${x.d}</small>`:''}</div>
     <div class="seg set-seg">${x.o.map(([v,l])=>`<button data-set="${x.k}" data-v='${JSON.stringify(v)}' class="${SAVE.ui[x.k]===v?'on':''}">${l}</button>`).join('')}</div></div>`).join('');
   overlay(`<h2>⚙ 設定</h2><div class="settings">${rows}</div><div class="row-btns"><button class="btn go" data-ov="setclose">閉じる</button></div>`,'settings');
@@ -2130,9 +2167,15 @@ function soloResults(r){
     <div class="big-score">${score}<span style="font-size:18px">点</span></div>
     ${stars?`<div style="font-size:12px;font-weight:800">忙しさ「${E.busyOf(r.busy).name}」の★ ${stars.join(' / ')} 点　自己ベスト ${B[bk]||0}</div>`:`<div style="font-size:12px;font-weight:800">忙しさ「${E.busyOf(r.busy).name}」 自己ベスト ${B[bk]||0}</div>`}
     <div class="stats"><div>${E.isQuiz(r.g)?'正解':'提供'}<b>${r.team.served}</b></div><div>${E.isQuiz(r.g)?'誤答':'失敗'}<b>${r.team.failed}</b></div><div>最大連続<b>${r.team.maxCombo}</b></div></div>`;
+  const rkOk=RK.ranked(r.g,st.id),rkey=rankKey(r.g,st.id,r.busy,SES&&SES.cfg&&SES.cfg.coef);
+  if(rkOk)h+=`<div class="rk-me" id="rkMe">${rankOn()?'🏆 全国ランキングに送信中…':'🏆 全国ランキングに参加していない（⚙設定で変えられる）'}</div>`;
   h+=nightNote()+reviewHTML(r,'solo');
   h+=`<div class="row-btns">${canNext?'<button class="btn go" data-ov="next">次のステージ</button>':''}<button class="btn" data-ov="retry">もう一回</button><button class="btn sub" data-ov="menu">メニュー</button></div>`;
   overlay(h,'result');
+  if(rkOk&&rankOn())RK.submit(r.g,rkey,myName(),score).then(j=>{
+    const el=$('rkMe');if(!el||!j)return;
+    el.innerHTML=`🏆 今週の全国 <b>${j.rank}</b>位 / ${j.total}人<small>（${esc(RK.cleanName(myName()))}・このステージ・忙しさ「${E.busyOf(r.busy).name}」／自己ベスト ${j.best}）</small><button class="btn sub mini" data-rank="${esc(r.g)}|${esc(st.id)}">ランキングを見る</button>`;
+  }).catch(err=>{const el=$('rkMe');if(el)el.textContent='🏆 ランキングに送れなかった（'+(err&&err.name==='AbortError'?'通信が遅い':String(err&&err.message||err).slice(0,60))+'）';});
 }
 function mpButtons(){
   if(SES&&SES.role==='host')return `<div class="row-btns"><button class="btn go" data-ov="again">もう一回</button><button class="btn sub" data-ov="lobby">ロビーへ</button></div>`;

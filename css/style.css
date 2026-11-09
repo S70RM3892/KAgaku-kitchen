@@ -896,3 +896,14 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 :where(body.ui-land) #quizbox.kk .kk-pad{grid-template-columns:repeat(4,1fr);align-self:end}
 :where(body.ui-land) #quizbox.kk .kk-pad{gap:4px}:where(body.ui-land) #quizbox.kk .kk-pad button{font-size:18px;padding:1px 0;border-width:2px;box-shadow:0 2px 0 var(--ink)}
 .kk-sum{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:14px}.kk-sum small{color:var(--hot);margin-left:4px}
+/* =================== 全国ランキング =================== */
+.rk-me{margin:8px 0;padding:8px 10px;border-radius:10px;background:#fff6d6;border:2px solid var(--ink);font-weight:800;font-size:14px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.rk-me b{font-family:var(--font-display);font-size:24px;color:var(--hot)}
+.rk-me small{flex:1 1 100%;font-size:11px;color:#3c5560}
+.btn.mini{flex:0 0 auto;min-width:0;padding:4px 10px;font-size:12px}
+.rk-ctl{display:flex;gap:6px;flex-wrap:wrap}
+.rk-ctl select{flex:1 1 140px;font:inherit;font-weight:800;font-size:14px;border:2px solid var(--ink);border-radius:8px;padding:4px;background:#fff;color:var(--ink)}
+.rk-per{margin:6px 0;grid-template-columns:1fr 1fr}
+.rk.me{background:#fff6d6;outline:3px solid var(--hot)}
+.rk-gap{text-align:center;font-weight:800;color:#3c5560}
+.rk-per button{color:var(--ink);background:#fff;border:2px solid var(--ink);border-radius:10px;font-weight:800;padding:6px}.rk-per button.on{background:var(--ticket)}
