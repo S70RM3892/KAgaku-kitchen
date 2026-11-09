@@ -3,13 +3,13 @@
 // ヒントは「ぼんやり → はっきり」の順に並べる。仕組みは早押しクイズ（quiz.js）と同じ形のデータ
 import * as QZ from './quiz.js';
 
-function makeBank(raw,catName,stages,review,extra){
+export function makeBank(raw,catName,stages,review,extra){
   const Q={};
   raw.forEach(([cat,n,clues],i)=>{Q[cat.split(':')[0]+':'+i]={k:cat.split(':')[0]+':'+i,src:cat.split(':')[0],n,cat,clues:[`分野：${catName[cat]}`,...clues]};});
   if(extra)for(const k of extra.ALL){const q=extra.Q[k];if(!Object.values(Q).some(x=>x.n===q.n))Q['x'+k]={...q,k:'x'+k};}
   const ALL=Object.keys(Q);
   const choices=(k,n,rand=Math.random)=>{
-    const q=Q[k],out=[k],pick=list=>{const c=list.filter(x=>!out.includes(x)&&Q[x].n!==q.n);while(c.length&&out.length<n)out.push(c.splice(Math.floor(rand()*c.length),1)[0]);};
+    const q=Q[k],out=[k],pick=list=>{const c=list.filter(x=>!out.includes(x)&&Q[x].n!==q.n);while(c.length&&out.length<n){const x=c.splice(Math.floor(rand()*c.length),1)[0];if(!out.some(y=>Q[y].n===Q[x].n))out.push(x);}};   // 同じ答え（表示）が2つ並ばないように
     pick(ALL.filter(x=>Q[x].cat===q.cat));pick(ALL.filter(x=>Q[x].src===q.src));pick(ALL);
     for(let i=out.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[out[i],out[j]]=[out[j],out[i]];}
     return out;

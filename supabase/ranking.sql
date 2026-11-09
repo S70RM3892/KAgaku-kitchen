@@ -7,7 +7,7 @@ create schema if not exists kk;
 
 create table if not exists kk.scores (
   id bigint generated always as identity primary key,
-  g text not null check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem')),
+  g text not null check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath')),
   st text not null check (st ~ '^[a-z0-9]{1,8}@[1-5](\+c)?$'),
   name text not null check (char_length(name) between 1 and 12),
   dev text not null check (dev ~ '^[0-9a-f]{16}$'),
@@ -87,3 +87,7 @@ revoke all on function public.kk_top(text,text,integer,text,integer) from public
 revoke all on function public.kk_submit(text,text,text,text,integer) from public;
 grant execute on function public.kk_top(text,text,integer,text,integer) to anon, authenticated;
 grant execute on function public.kk_submit(text,text,text,text,integer) to anon, authenticated;
+
+-- 2026-11: 京大数学 早押し（kmath）を追加（作成済みの表は制約を付け直す）
+alter table kk.scores drop constraint if exists scores_g_check;
+alter table kk.scores add constraint scores_g_check check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath'));

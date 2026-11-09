@@ -17,7 +17,7 @@ const {COLORS,STAMPS}=E;
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
 let KKSAVED=[];      // この端末に読み込んだ過去問（IndexedDB）
-let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec(),kako:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec(),kako:blankRec(),kmath:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -30,11 +30,11 @@ try{
     if(o.vs&&!(SAVE.vs.win+SAVE.vs.lose+SAVE.vs.draw))SAVE.vs=o.vs;
   }
 }catch(e){}
-const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kako'];
+const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kako','kmath'];
 // 科目：化学（4モード）と英語（3モード）
-const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz'],KYO=['kphy','kchem','kako'];
-const SUBJ={chem:CHEM,eng:ENG,kyo:KYO};
-const subjOf=g=>ENG.includes(g)?'eng':KYO.includes(g)?'kyo':'chem';
+const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz'],KYO=['kphy','kchem','kako'],MATHS=['kmath'];
+const SUBJ={chem:CHEM,eng:ENG,kyo:KYO,math:MATHS};
+const subjOf=g=>ENG.includes(g)?'eng':KYO.includes(g)?'kyo':MATHS.includes(g)?'math':'chem';
 for(const g of GS){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
 if(!SAVE.vs)SAVE.vs={win:0,lose:0,draw:0};
 if(!GS.includes(SAVE.g))SAVE.g='rx';
@@ -49,7 +49,7 @@ const GK=g=>GS.includes(g)?g:'rx';
 const SV=g=>SAVE[GK(g)];
 const knownKey=(g,k)=>E.isQuiz(g)?E.QBANK[g].known(k):g==='atom'?!!A.BYID[k]:isParts(g)?PM[g].M.known(k):!!MENU[k];
 // モードごとの呼び名
-const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題',kako:'問題'};
+const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題',kako:'問題',kmath:'問題'};
 // 部品で組むモード（官能基・無機イオン）の画面まわり：棚の並び・伝票の種類・ヒント・表示
 const PM={
   org:{M:O,unit:'部品',cap:'骨格・官能基：タップで選んだ客の鍋へ',stackCols:6,
@@ -226,6 +226,7 @@ const HOWTO={
   org:`<b>官能基モード</b>：骨格（CH₃–・C₆H₅–・o-C₆H₄ など）と官能基（–OH・–CHO・–COOH など）の<b>部品を組んで有機化合物を作る</b>。「見分け」の注文では、2つの化合物を区別できる<b>検出試薬</b>（銀鏡・ヨードホルム・FeCl₃・NaHCO₃・さらし粉など）を1つ選ぶ。<br>
       <b>段階を選べる</b>：基礎（官能基入門）→基礎＋（検出反応）→標準（芳香族）→応用（異性体・ひっかけ）→京大（全範囲・性質のみ）。最初から全部選べる。<br>
       <b>覚え方の仕組み</b>：間違えると「何ができたか」「各試薬で何が起きるか」がその場で出て、次からよく注文される。教科書や文献で扱いが割れる反応（ギ酸とフェーリング液など）は正解に使わない。`,
+  kmath:`<b>京大数学 早押し</b>：極限・微分・定積分・面積体積・数列・確率・複素数平面・ベクトル・整数・三角指数対数の<b>計算問題</b>（全121問・すべて自作）。ヒントは「分野 → 問題文 → 解き方 → 途中の結果」の順に出るので、<b>問題文だけで解ければ最高点</b>。最後のヒントのあと40秒考えられる。<br>正解はすべて数式処理（sympy）と総当たりの計算で確かめてある。段階：極限と微分 → 積分・数列・関数 → 図形と複素数 → 確率と整数 → 京大ラッシュ。`,
   kphy:`<b>共テ物理 早押し</b>：力学・熱・波動・電磁気・原子の<b>法則・現象・力・物理量</b>を、少しずつ出るヒントから当てる早押し（全84問・すべて自作）。ヒントは分野 → 特徴 → 式・数値の順にはっきりしていく。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：力学→熱と波動→電磁気→原子→共テ総合。`,
   kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（理論・高分子66問＋物質の早押し問題、すべて自作）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
   kako:`<b>過去問 早押し</b>：自分で用意した共テ・センターの物理・化学のPDF（問題と正解）を<b>この端末に読み込み</b>、1問ずつ切り取って早押しにする。問題は<b>上から少しずつ見えていく</b>ので、解けた瞬間に解答番号（①〜⑨・⓪）を押す。<br>

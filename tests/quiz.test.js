@@ -37,9 +37,16 @@ const P2=[{id:'p0',name:'A',slot:0},{id:'p1',name:'B',slot:1}];
   for(let i=0;i<50;i++)tick(S,0.1);const q2=S.qz.q;apply(S,'p1',{t:'ans',c:q2.k});assert.ok(S.team.score>0);
 }
 // 共テ物理・化学の早押し：同じ仕組みで動く。名前の重複なし・ヒント3つ以上・選択肢は正解を含む
-import('../js/kyote.js').then(({KPHY,KCHEM})=>{
-  for(const [g,B] of [['kphy',KPHY],['kchem',KCHEM]]){
-    assert.equal(new Set(B.ALL.map(k=>B.Q[k].n)).size,B.ALL.length,g+' unique names');
+Promise.all([import('../js/kyote.js'),import('../js/kmath.js')]).then(([{KPHY,KCHEM},{KMATH}])=>{
+  // 京大数学：問題文＋ヒント2つ以上・選択肢に同じ値が2つ並ばない・だれも答えなくても制限時間内に全問出る
+  assert.ok(KMATH.ALL.length>=120,'kmath has 120+ questions');
+  for(const k of KMATH.ALL){const q=KMATH.Q[k];assert.ok(q.clues.length>=4&&/求めよ|何通りか|いくつあるか|何桁|を解け|で表せ/.test(q.clues[1]),k);
+    for(let r=0;r<5;r++){const c=KMATH.choices(k,6);assert.ok(c.includes(k));assert.equal(new Set(c.map(x=>KMATH.Q[x].n)).size,c.length,k+' duplicate value in choices');}}
+  for(const st of KMATH.STAGES){const S=createGame({g:'kmath',mode:'solo',stageId:st.id,players:[{id:'p0',name:'me'}]});begin(S);
+    let guard=0;while(!S.over&&guard++<200000)tick(S,0.1);assert.equal(results(S).log.length,S.qz.total,'kmath '+st.id+' all questions asked before time runs out');}
+  console.log('kmath ok',KMATH.ALL.length,'questions');
+  for(const [g,B] of [['kphy',KPHY],['kchem',KCHEM],['kmath',KMATH]]){
+    if(g!=='kmath')assert.equal(new Set(B.ALL.map(k=>B.Q[k].n)).size,B.ALL.length,g+' unique names');   // 数学は答えの値が重なってよい
     for(const k of B.ALL){assert.ok(B.Q[k].clues.length>=3,k);const c=B.choices(k,6);assert.ok(c.includes(k)&&c.length===6);}
     for(const st of [...B.STAGES.map(x=>x.id),'rv'])for(const mode of ['solo','coop','versus']){
       const S=createGame({g,mode,stageId:st,players:mode==='solo'?[{id:'p0',name:'me'}]:P2});begin(S);assert.equal(S.g,g);
