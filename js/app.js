@@ -396,6 +396,7 @@ function kakoImportDialog(){
       </div>
       <div class="row-btns kk-dl">
         <button class="btn sub mini" data-kdl="urls">URL一覧をコピー</button>
+        <button class="btn sub mini" data-kdl="android">Android用コマンドをコピー</button>
         <button class="btn sub mini" data-kdl="unix">Mac用コマンドをコピー</button>
         <button class="btn sub mini" data-kdl="win">Windows用コマンドをコピー</button>
       </div>
@@ -409,6 +410,14 @@ function kakoImportDialog(){
           <li>ここで「URL一覧をコピー」→ ショートカットを実行 → 保存したフォルダのPDFを上の「ファイルを選ぶ」でまとめて選ぶ。</li>
         </ol>
         <p class="note">アクションの名前はiOSのバージョンで少し違うことがある。</p>
+      </details>
+      <details class="kk-how"><summary>Android：「Termux」で一括保存</summary>
+        <ol>
+          <li>「Termux」を <b>F-Droid</b> か GitHub から入れる（Google Play 版は更新が止まっている）。</li>
+          <li>ここで「Android用コマンドをコピー」→ Termux に貼り付けて Enter。初回だけファイルへのアクセスの許可を聞かれるので「許可」。</li>
+          <li>「完了」と出たら、上の「ファイルを選ぶ」で「ダウンロード」→「kakomon」のPDFをまとめて選ぶ。</li>
+        </ol>
+        <p class="note">2回目からは、コピー → 貼り付けだけ。すでにあるファイルも取り直す。</p>
       </details>
       <details class="kk-how"><summary>パソコン：コマンドで一括保存</summary>
         <p class="note">Mac は「ターミナル」、Windows は「PowerShell」を開き、コピーしたコマンドを貼り付けて Enter。
@@ -435,7 +444,7 @@ document.addEventListener('change',e=>{if(e.target.closest('[data-kr]'))kakoDlCo
 document.addEventListener('click',async e=>{
   const b=e.target.closest('[data-kdl]');if(!b)return;
   const l=kakoDlPick(),msg=$('kkDlMsg');if(!l.length){if(msg)msg.textContent='年度と科目を選ぶ';return;}
-  const t=b.dataset.kdl==='urls'?KSRC.urlList(l):b.dataset.kdl==='unix'?KSRC.cmdUnix(l):KSRC.cmdWin(l);
+  const k=b.dataset.kdl,t=k==='urls'?KSRC.urlList(l):k==='unix'?KSRC.cmdUnix(l):k==='android'?KSRC.cmdAndroid(l):KSRC.cmdWin(l);
   let ok=false;try{await navigator.clipboard.writeText(t);ok=true;}catch(err){}
   if(!ok){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy');}catch(err){}ta.remove();}
   if(msg)msg.textContent=ok?`コピーした（${l.length*2}ファイル分）`:'コピーできなかった。長押しで選んでコピーして';

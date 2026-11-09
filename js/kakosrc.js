@@ -63,4 +63,6 @@ export function lookup(name,size){
 export const pick=(from,to,subjs)=>CATALOG.filter(c=>c.year>=from&&c.year<=to&&subjs.includes(c.subj));
 export const urlList=list=>list.flatMap(c=>[c.q,c.a]).join('\n');
 export const cmdUnix=list=>`mkdir -p kakomon && cd kakomon && for u in ${list.flatMap(c=>[c.q,c.a]).map(u=>"'"+u+"'").join(' ')}; do curl -fsSLO "$u"; sleep 1; done`;
+// Android：Termux（F-Droid 版）で実行する。初回は保存の許可を求め、許可されるまで待つ。「ダウンロード」の kakomon フォルダに保存する
+export const cmdAndroid=list=>`[ -d ~/storage/downloads ] || termux-setup-storage; until [ -d ~/storage/downloads ]; do sleep 1; done; command -v curl >/dev/null || pkg install -y curl; mkdir -p ~/storage/downloads/kakomon && cd ~/storage/downloads/kakomon && for u in ${list.flatMap(c=>[c.q,c.a]).map(u=>"'"+u+"'").join(' ')}; do curl -fsSLO "$u"; sleep 1; done; echo 完了`;
 export const cmdWin=list=>`New-Item -ItemType Directory -Force kakomon | Out-Null; Set-Location kakomon; @(${list.flatMap(c=>[c.q,c.a]).map(u=>"'"+u+"'").join(',')}) | ForEach-Object { Invoke-WebRequest -Uri $_ -OutFile (Split-Path $_ -Leaf); Start-Sleep 1 }`;
