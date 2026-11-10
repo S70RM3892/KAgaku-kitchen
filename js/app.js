@@ -7,6 +7,7 @@ import {ROOTM,SYNM,WORDM} from './eng.js';
 import * as QZ from './quiz.js';
 import * as KK from './kakomon.js';
 import * as RK from './rank.js';
+import {HALFS} from './kredox.js';
 import * as KSRC from './kakosrc.js';
 import {CHEMMAP,SRCN,pick as mapPick} from './chemmap.js';
 import * as E from './engine.js';
@@ -18,7 +19,7 @@ const {COLORS,STAMPS}=E;
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
 let KKSAVED=[];      // この端末に読み込んだ過去問（IndexedDB）
-let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec(),kako:blankRec(),kmath:blankRec(),kcalc:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec(),kako:blankRec(),kmath:blankRec(),kcalc:blankRec(),kredox:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -31,9 +32,9 @@ try{
     if(o.vs&&!(SAVE.vs.win+SAVE.vs.lose+SAVE.vs.draw))SAVE.vs=o.vs;
   }
 }catch(e){}
-const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kako','kmath','kcalc'];
+const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kako','kmath','kcalc','kredox'];
 // 科目：化学（4モード）と英語（3モード）
-const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz','kcalc'],KYO=['kphy','kchem','kako'],MATHS=['kmath'];
+const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz','kcalc','kredox'],KYO=['kphy','kchem','kako'],MATHS=['kmath'];
 const SUBJ={chem:CHEM,eng:ENG,kyo:KYO,math:MATHS};
 const subjOf=g=>ENG.includes(g)?'eng':KYO.includes(g)?'kyo':MATHS.includes(g)?'math':'chem';
 for(const g of GS){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
@@ -50,7 +51,7 @@ const GK=g=>GS.includes(g)?g:'rx';
 const SV=g=>SAVE[GK(g)];
 const knownKey=(g,k)=>E.isQuiz(g)?E.QBANK[g].known(k):g==='atom'?!!A.BYID[k]:isParts(g)?PM[g].M.known(k):!!MENU[k];
 // モードごとの呼び名
-const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題',kako:'問題',kmath:'問題',kcalc:'問題'};
+const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題',kako:'問題',kmath:'問題',kcalc:'問題',kredox:'問題'};
 // 部品で組むモード（官能基・無機イオン）の画面まわり：棚の並び・伝票の種類・ヒント・表示
 const PM={
   org:{M:O,unit:'部品',cap:'骨格・官能基：タップで選んだ客の鍋へ',stackCols:6,
@@ -228,6 +229,9 @@ const HOWTO={
       <b>段階を選べる</b>：基礎（官能基入門）→基礎＋（検出反応）→標準（芳香族）→応用（異性体・ひっかけ）→京大（全範囲・性質のみ）。最初から全部選べる。<br>
       <b>覚え方の仕組み</b>：間違えると「何ができたか」「各試薬で何が起きるか」がその場で出て、次からよく注文される。教科書や文献で扱いが割れる反応（ギ酸とフェーリング液など）は正解に使わない。`,
   kcalc:`<b>理論化学 計算</b>：物質量・気体・溶液・エンタルピー・酸塩基と pH・酸化還元滴定・電池と電気分解・反応速度・平衡・結晶格子・有機と高分子の<b>計算問題</b>（全117問・すべて自作）。ヒントは「分野 → 問題文 → 解き方 → 途中の結果」の順に出るので、<b>問題文だけで解ければ最高点</b>。最後のヒントのあと60秒考えられる。まちがいの選択肢は「係数の掛け忘れ」などの<b>よくある間違い</b>の値。<br>正解はすべて計算で確かめてある。原子量や定数は問題文に書いてある。`,
+  kredox:`<b>酸化還元・電池</b>：酸化数・<b>半反応式</b>・イオン反応式・化学反応式・イオン化傾向・<b>電池</b>・<b>電気分解</b>の早押し（全202問・すべて自作）。<br>
+      <b>半反応式は丸暗記しない</b>：ヒントが「変化（MnO₄⁻ → Mn²⁺）→ O を H₂O で合わせる → H を H⁺ で合わせる →（塩基性なら OH⁻ を足す）→ 電荷を e⁻ で合わせる」の順に出るので、<b>組み立ての手順ごと身につく</b>。覚えるのは「何が何に変わるか」だけ。まちがいの選択肢は「e⁻ の数のずれ」「H⁺ の数のずれ」「e⁻ をそろえずに足した式（原子は合うが電荷が合わない）」「条件ちがいの生成物（MnO₂ と Mn²⁺、NO と NO₂）」など、<b>よくある間違い</b>。<br>
+      <b>📖 半反応式の一覧</b>（ステージの下）で、式を隠して思い出す練習ができる。正解はすべて、手で書いた式と機械的に組み立てた式・規則で決めた答えが一致することを確かめてある。段階：酸化数 → 半反応式（酸化剤）→（還元剤）→ 反応式 → イオン化傾向と電池 → 電気分解 → 京大ラッシュ。`,
   kmath:`<b>京大数学 早押し</b>：極限・微分・定積分・面積体積・数列・確率・複素数平面・ベクトル・整数・三角指数対数の<b>計算問題</b>（全121問・すべて自作）。ヒントは「分野 → 問題文 → 解き方 → 途中の結果」の順に出るので、<b>問題文だけで解ければ最高点</b>。最後のヒントのあと40秒考えられる。<br>正解はすべて数式処理（sympy）と総当たりの計算で確かめてある。段階：極限と微分 → 積分・数列・関数 → 図形と複素数 → 確率と整数 → 京大ラッシュ。`,
   kphy:`<b>共テ物理 早押し</b>：力学・熱・波動・電磁気・原子の<b>法則・現象・力・物理量</b>を、少しずつ出るヒントから当てる早押し（全84問・すべて自作）。ヒントは分野 → 特徴 → 式・数値の順にはっきりしていく。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：力学→熱と波動→電磁気→原子→共テ総合。`,
   kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（法則・用語・反応名など197問＋物質の早押し問題、すべて自作。分離・周期表・電池・無機工業・有機反応・糖やアミノ酸まで高校化学の全範囲）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
@@ -280,6 +284,8 @@ function renderTitle(){
   h+=`<button class="stage review" data-stage="rv"><div class="no">復</div>
     <div><h3>${RV.name}</h3><p>${weak?`苦手候補 ${weak} ${unit}から集中注文。星なし・何度でも`:`一度でも注文された${unit}が出たら解放`}</p></div>
     <div class="best">${R.best[busyKey('rv',SAVE.busy)]?R.best[busyKey('rv',SAVE.busy)]+'点':'—'}</div></button>`;
+  if(g==='kredox')h+=`<button class="stage review table" data-stage="tbl"><div class="no">📖</div>
+    <div><h3>半反応式の一覧で覚える</h3><p>式を隠して思い出す → タップで答え合わせ。作り方の4手順つき</p></div><div class="best">${HALFS.length}式</div></button>`;
   $('stageList').innerHTML=h;
   renderKakoBox(g);
   renderBusy($('titleBusy'),SAVE.busy,false);
@@ -302,6 +308,7 @@ $('stageList').addEventListener('click',e=>{
   const b=e.target.closest('.stage');if(!b)return;
   audio();
   const v=b.dataset.stage,g=SAVE.g;
+  if(v==='tbl'){halfTable();return;}
   if(v==='rv'){if(!reviewPool(g).length&&!Object.keys(myWeights(g)).length){overlay(`<h2>まだ早い</h2><p>ステージを1回遊ぶと、注文された${UNIT[GK(g)]}の習熟度が記録され、苦手克服ランが使えるようになる。</p><button class="btn" data-ov="close">閉じる</button>`);return;}startSolo('rv');return;}
   const i=+v;if(!unlocked(i,g))return;startSolo(stagesOf(g)[i].id);
 });
@@ -720,8 +727,8 @@ $('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');
   else if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
 
 /* ================= 特訓（単元 × ルール）・今日の10問・今日の復習・誤答ノート ================= */
-const DRILL_BANKS=['kcalc','kchem','quiz','kmath','kphy'];
-const BANKN={kcalc:'化学計算',kchem:'化学知識',quiz:'物質当て',kmath:'京大数学',kphy:'共テ物理'};
+const DRILL_BANKS=['kcalc','kredox','kchem','quiz','kmath','kphy'];
+const BANKN={kcalc:'化学計算',kredox:'酸化還元',kchem:'化学知識',quiz:'物質当て',kmath:'京大数学',kphy:'共テ物理'};
 const DRULES=[
   {id:'std',name:'通常',d:'10問。ヒントが少しずつ出る'},
   {id:'ta',name:'タイムアタック',d:'90秒（数学は150秒）で何問正解できるか'},
@@ -808,6 +815,17 @@ function drillResults(r){
     <div class="row-btns"><button class="btn sub mini" data-ov="share">📤 結果を共有</button></div>
     <div class="row-btns"><button class="btn go" data-ov="retry">もう一回</button><button class="btn" data-ov="drill">特訓メニュー</button><button class="btn sub" data-ov="menu">メニュー</button></div>`,'result');
 }
+// 半反応式の一覧（覚える用）：式は隠しておき、タップで見る。全部見せる／隠すの切り替えと、ここから出題
+function halfTable(){
+  const H=UI.ht||(UI.ht={open:false});
+  const row=([n,c,eq])=>`<details class="ht-it"${H.open?' open':''}><summary><b>${esc(n)}</b>${c?`<small>${esc(c)}</small>`:''}</summary><div class="ht-eq">${esc(eq)}</div></details>`;
+  overlay(`<h2>📖 半反応式の一覧</h2>
+    <p class="note"><b>作り方</b>：① 何が何に変わるかを書く（ここだけ覚える）→ ② O の数を H₂O で合わせる → ③ H の数を H⁺ で合わせる → ④ 両辺の電荷を e⁻ で合わせる。塩基性のときは、最後に H⁺ と同じ数の OH⁻ を両辺に足して H₂O にまとめる。</p>
+    <div class="row-btns"><button class="btn sub" data-ht="toggle">${H.open?'式を隠す':'式を全部見せる'}</button><button class="btn go" data-ht="play">半反応式だけで出題</button></div>
+    <h3 class="ht-h">酸化剤（e⁻ を受け取る）</h3><div class="ht-list">${HALFS.filter(x=>x[3]==='o').map(row).join('')}</div>
+    <h3 class="ht-h">還元剤（e⁻ を出す）</h3><div class="ht-list">${HALFS.filter(x=>x[3]==='r').map(row).join('')}</div>
+    <div class="row-btns"><button class="btn go" data-ov="close">閉じる</button></div>`,'half');
+}
 function noteOverlay(){
   const H=UI.nb||(UI.nb={g:DRILL_BANKS.find(g=>noteIds(g).length)||'kcalc'});
   const ids=noteIds(H.g),B=E.QBANK[H.g],M=SV(H.g).mastery;
@@ -825,6 +843,12 @@ $('ov').addEventListener('click',e=>{
     if((b=e.target.closest('[data-du]'))){const u=drillUnits(H.g)[+b.dataset.du];if(u){closeOverlay();drillStart(H.g,u,H.rule);}return;}
     if((b=e.target.closest('[data-dd]'))){const g=b.dataset.dd;closeOverlay();startSolo('s1',g,{rule:'daily',drill:`${g}|daily|${dayKey(new Date())}`,order:dailyOrder(g),pool:E.QBANK[g].ALL.slice(),label:`${BANKN[g]}・今日の10問`});return;}
     if((b=e.target.closest('[data-dr]'))){const g=b.dataset.dr,ids=dueIds(g);if(!ids.length)return;closeOverlay();startSolo('s1',g,{rule:'std',drill:`${g}|review|std`,pool:ids,qn:Math.min(10,ids.length),label:`${BANKN[g]}・今日の復習`});return;}
+  }
+  if(OVK==='half'){
+    const b=e.target.closest('[data-ht]');if(!b)return;
+    if(b.dataset.ht==='toggle'){UI.ht.open=!UI.ht.open;halfTable();return;}
+    const B=E.QBANK.kredox,ids=B.ALL.filter(k=>B.Q[k].src.startsWith('half'));closeOverlay();
+    startSolo('s1','kredox',{rule:'std',drill:'kredox|half|std',pool:ids,qn:10,label:'半反応式だけ'});return;
   }
   if(OVK==='note'){
     let b;

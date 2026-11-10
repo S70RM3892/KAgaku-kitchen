@@ -95,3 +95,7 @@ alter table kk.scores add constraint scores_g_check check (g in ('rx','atom','or
 -- 2026-11: 理論化学 計算（kcalc）を追加
 alter table kk.scores drop constraint if exists scores_g_check;
 alter table kk.scores add constraint scores_g_check check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath','kcalc'));
+
+-- 2026-11: 酸化還元・電池（kredox）を追加
+alter table kk.scores drop constraint if exists scores_g_check;
+alter table kk.scores add constraint scores_g_check check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath','kcalc','kredox'));

@@ -10,6 +10,7 @@ import * as QZ from './quiz.js';
 import {KPHY,KCHEM} from './kyote.js';
 import {KMATH} from './kmath.js';
 import {KCALC} from './kcalc.js';
+import {KREDOX} from './kredox.js';
 import {KAKO} from './kakomon.js';
 export const COLORS=['#ff7a45','#2fd6a3','#5ab0ff','#d39bff'];
 export const ROT_SEC=40;      // 協力：棚替えの間隔
@@ -133,7 +134,7 @@ RULES.eword=engRules(WORDM,{life:14});
 // 早押しクイズ：注文と鍋は使わず、1問ずつヒントが出て、選択肢を早く正しく選んだ人が得点
 // 問題の束：物質の早押し（quiz）と、共テ物理（kphy）・共テ化学（kchem）。仕組みは同じ
 // kako：各自の端末に読み込んだ過去問（問題の画像と正解は端末の中だけにある）
-export const QBANK={quiz:QZ,kphy:KPHY,kchem:KCHEM,kako:KAKO,kmath:KMATH,kcalc:KCALC};
+export const QBANK={quiz:QZ,kphy:KPHY,kchem:KCHEM,kako:KAKO,kmath:KMATH,kcalc:KCALC,kredox:KREDOX};
 export const isQuiz=g=>has(QBANK,g);
 const QB=S=>QBANK[S.g];
 const quizRules=B=>({stages:B.STAGES,review:B.REVIEW,cells:[],col:{},
@@ -145,7 +146,7 @@ export const QUIZ_WAIT=3.5;   // 正解発表のあと次の問題までの秒�
 export const QUIZ_TAIL=6;     // 最後のヒントのあと答えられる秒数
 export const quizGain=q=>10+6*(q.clues.length-q.shown);       // 早く答えるほど高い
 export const quizLoss=q=>3+2*(q.clues.length-q.shown);        // 早く間違えるほど痛い（当てずっぽうは損）
-export const GAMES={quiz:'早押しクイズ',kphy:'共テ物理 早押し',kchem:'共テ化学 早押し',kako:'過去問 早押し',kmath:'京大数学 早押し',kcalc:'理論化学 計算',rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
+export const GAMES={quiz:'早押しクイズ',kphy:'共テ物理 早押し',kchem:'共テ化学 早押し',kako:'過去問 早押し',kmath:'京大数学 早押し',kcalc:'理論化学 計算',kredox:'酸化還元・電池',rx:'反応式モード',atom:'組成モード',org:'官能基モード',ion:'無機イオンモード',eroot:'語根モード',esyn:'構文モード',eword:'見分けモード'};
 // 忙しさ：注文の出る間隔・同時に並ぶ数・制限時間を変える。5（無限オーダー）は伝票が空いたらすぐ次が来る
 export const BUSY=[null,
   {name:'ひま',desc:'注文はゆっくり。じっくり覚える（得点×0.8）',spawn:1.6,max:-1,life:1.3,pts:0.8,exp:10,star:0.85},

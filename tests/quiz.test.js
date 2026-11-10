@@ -37,7 +37,7 @@ const P2=[{id:'p0',name:'A',slot:0},{id:'p1',name:'B',slot:1}];
   for(let i=0;i<50;i++)tick(S,0.1);const q2=S.qz.q;apply(S,'p1',{t:'ans',c:q2.k});assert.ok(S.team.score>0);
 }
 // 共テ物理・化学の早押し：同じ仕組みで動く。名前の重複なし・ヒント3つ以上・選択肢は正解を含む
-Promise.all([import('../js/kyote.js'),import('../js/kmath.js'),import('../js/kcalc.js'),import('../js/chemmap.js')]).then(([{KPHY,KCHEM},{KMATH},{KCALC},{CHEMMAP,pick}])=>{
+Promise.all([import('../js/kyote.js'),import('../js/kmath.js'),import('../js/kcalc.js'),import('../js/chemmap.js'),import('../js/kredox.js')]).then(([{KPHY,KCHEM},{KMATH},{KCALC},{CHEMMAP,pick},{KREDOX,HALFS}])=>{
   // 理論化学 計算：問題ごとに「よくある間違い」の選択肢をもつ。正解は必ず選択肢に入り、同じ表示が2つ並ばない
   assert.ok(KCALC.ALL.length>=110,'kcalc has 110+ questions');
   for(const k of KCALC.ALL){const q=KCALC.Q[k];assert.ok(KCALC.known(k)&&q.clues.length>=4&&q.wrong.length>=3,k);assert.ok(q.wrong.every(w=>!KCALC.known(w)&&KCALC.Q[w].n!==q.n),k+' distractor');
@@ -46,9 +46,17 @@ Promise.all([import('../js/kyote.js'),import('../js/kmath.js'),import('../js/kca
     let guard=0;while(!S.over&&guard++<300000){const q=S.qz.q;if(q&&q.state==='open'&&q.t>2&&guard%7===0)apply(S,'p0',{t:'ans',c:guard%3?q.k:q.choices.find(c=>c!==q.k)});tick(S,0.1);}
     assert.equal(results(S).log.length,S.qz.total,'kcalc '+st.id);}
   console.log('kcalc ok',KCALC.ALL.length,'questions');
+  // 酸化還元・電池：同じ仕組み。正解は必ず選択肢に入り、同じ表示が2つ並ばない。どの段階も最後まで出題できる
+  assert.ok(KREDOX.ALL.length>=200,'kredox has 200+ questions');assert.ok(HALFS.length>=30,'half-reaction table');
+  for(const k of KREDOX.ALL){const q=KREDOX.Q[k];assert.ok(KREDOX.known(k)&&q.clues.length>=3&&q.wrong.length>=3,k);assert.ok(q.wrong.every(w=>!KREDOX.known(w)&&KREDOX.Q[w].n!==q.n),k+' distractor');
+    for(const n of [4,6]){const c=KREDOX.choices(k,n);assert.ok(c.includes(k));assert.equal(new Set(c.map(x=>KREDOX.Q[x].n)).size,c.length,k);}}
+  for(const st of KREDOX.STAGES){assert.ok(st.pool.length>=8,st.id);const S=createGame({g:'kredox',mode:'solo',stageId:st.id,players:[{id:'p0',name:'me'}]});begin(S);
+    let guard=0;while(!S.over&&guard++<300000){const q=S.qz.q;if(q&&q.state==='open'&&q.t>2&&guard%7===0)apply(S,'p0',{t:'ans',c:guard%3?q.k:q.choices.find(c=>c!==q.k)});tick(S,0.1);}
+    assert.equal(results(S).log.length,S.qz.total,'kredox '+st.id);}
+  console.log('kredox ok',KREDOX.ALL.length,'questions');
   // 化学マップ：共テ化学の知識問題と計算問題のすべてが、どれかの単元に入っている（抜けが無い）
   {const inMap=(g,B)=>B.ALL.filter(k=>!k.startsWith('x')).filter(k=>!CHEMMAP.some(S=>S.units.some(u=>u.src.some(([gg,sel])=>gg===g&&pick(sel,B.Q[k].cat,B.Q[k].n))))).map(k=>B.Q[k].n);
-   assert.deepEqual(inMap('kchem',KCHEM),[],'every kchem item is on the map');assert.deepEqual(inMap('kcalc',KCALC),[],'every kcalc item is on the map');
+   assert.deepEqual(inMap('kchem',KCHEM),[],'every kchem item is on the map');assert.deepEqual(inMap('kcalc',KCALC),[],'every kcalc item is on the map');assert.deepEqual(inMap('kredox',KREDOX),[],'every kredox item is on the map');
    // 名前で指定した項目は実在する（書き間違いが無い）
    const names=new Set(KCHEM.ALL.map(k=>KCHEM.Q[k].n));
    for(const S of CHEMMAP)for(const u of S.units)for(const [g,sel] of u.src)if(g==='kchem'&&sel&&sel.n)for(const n of sel.n)assert.ok(names.has(n),'map names an unknown item: '+n);

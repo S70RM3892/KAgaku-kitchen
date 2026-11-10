@@ -5,7 +5,7 @@ const URL_='https://zcwqgnlcigkieymhbnvh.supabase.co';
 const KEY='sb_publishable_yBcqMAsyfCvk53G52A47ww_ElQPayBU';   // 公開用のキー（公開してよい種類）
 
 // ランキングに載せるモード（各自の読み込んだ過去問で問題が違う「過去問 早押し」と、苦手克服ランは載せない）
-export const RANKED=new Set(['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath','kcalc']);
+export const RANKED=new Set(['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath','kcalc','kredox']);
 export const ranked=(g,stageId)=>RANKED.has(g)&&stageId!=='rv';
 
 export function deviceId(){

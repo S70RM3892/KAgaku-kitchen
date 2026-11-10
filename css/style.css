@@ -1011,3 +1011,12 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 :where(body.ui-land) .today-h,:where(body.ui-land) .today .note,:where(body.ui-land) #todayGoal{grid-column:1/-1}
 .goal-line{color:var(--ink)}
 .nb-it summary{flex-direction:column;gap:2px}.nb-it summary small{white-space:nowrap}
+
+/* 半反応式の一覧（覚える用） */
+.ht-h{margin:12px 0 4px;font-size:15px}
+.ht-list{display:grid;gap:4px}
+.ht-it{background:#f6fafb;border:1px solid #d6e3e8;border-radius:8px;padding:6px 10px}
+.ht-it summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
+.ht-it summary small{color:#3c5560}
+.ht-eq{margin-top:4px;font-size:16px;font-weight:700;color:var(--ink);overflow-wrap:anywhere}
+.stage.table .no{font-size:20px}
