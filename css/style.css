@@ -780,7 +780,7 @@ body.ui-port .orders.big .t-top .hint{font-size:13px;padding:2px 8px}
 .gsel button small{font-size:10px;line-height:1.25}
 /* 段階のタグ（基礎→京大） */
 .lvl{display:inline-block;font-family:var(--font-body);font-weight:800;font-size:10px;line-height:15px;padding:0 5px;border-radius:5px;margin-right:6px;border:1.5px solid var(--ink);vertical-align:2px;color:var(--ink)}
-.lvl.lv1{background:#a5d6a7}.lvl.lv2{background:#80deea}.lvl.lv3{background:#90caf9}.lvl.lv4{background:#d1c4e9}.lvl.lv5{background:var(--hot);color:#fff}
+.lvl.lv1{background:#a5d6a7}.lvl.lv2{background:#80deea}.lvl.lv3{background:#90caf9}.lvl.lv4{background:#d1c4e9}.lvl.lv5{background:#ffcc80}.lvl.lv6{background:#f8bbd0}.lvl:is(.last){background:var(--hot);color:#fff}
 .lst b .lvl{font-size:9.5px}
 /* 棚：部品3段＋検出試薬1段。横持ちではマスが縦長になりすぎないよう高さを抑える */
 .ptable.rx.org .half{grid-template-rows:13px repeat(3,minmax(0,72px)) 13px minmax(0,72px);align-content:center}
@@ -957,10 +957,10 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .goal-line{position:relative;background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px 10px 12px;margin:6px 0;font-weight:800;font-size:13px;display:flex;justify-content:space-between;overflow:hidden}
 .goal-line span{color:#3c5560}.goal-line i{position:absolute;left:0;bottom:0;height:6px;background:#2a78d6}.goal-line.met i{background:#178a4f}
 .dh-sec{font-weight:800;margin:10px 0 4px;font-size:14px}.dh-sec small{font-size:11px;color:#3c5560;margin-left:6px}
-.dh-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.dh-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
 .dh-card{background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;font-weight:800;font-size:12px;color:var(--ink)}
 .dh-card b{font-size:15px}.dh-card.done{background:#e8f6ee}.dh-card:disabled{opacity:.45}
-.seg.dh-rules,.seg.dh-banks{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:4px 0}
+.seg.dh-rules{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:4px 0}.seg.dh-banks{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin:4px 0}
 .seg.dh-rules button,.seg.dh-banks button{padding:6px 2px;font-size:12px;color:var(--ink);background:#fff;border:2px solid var(--ink);border-radius:8px;font-weight:800}
 .seg.dh-rules button.on,.seg.dh-banks button.on{background:var(--ticket)}
 .dh-rd{margin:2px 0 4px}
@@ -976,3 +976,16 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .dh-sec small,.dh-rd{color:#3c5560;font-weight:700}
 .rp-row input{flex:1 1 140px;font:inherit;font-size:14px;border:2px solid var(--ink);border-radius:8px;padding:6px;background:#fff;color:var(--ink)}
 #relayPassSt{font-weight:800;font-size:12px}
+.dh-card{font-size:11px;padding:6px 1px}.dh-card b{font-size:14px}.seg.dh-banks button{font-size:11px;padding:6px 1px}
+.nb-ans{margin:6px 0 0;font-size:13px}
+/* =================== 化学マップ =================== */
+.cm-lead{color:#3c5560;font-weight:700}
+.cm-total{background:#fff;border:2px solid var(--ink);border-radius:10px;padding:8px 10px;margin:6px 0;display:grid;grid-template-columns:auto auto 1fr;gap:2px 10px;align-items:baseline}
+.cm-total span{font-weight:800}.cm-total b{font-family:var(--font-display);font-size:26px}.cm-total small{font-size:11px;color:#3c5560;font-weight:700;text-align:right}.cm-total .sm-bar{grid-column:1/-1}
+.cm-sec{display:flex;align-items:baseline;gap:8px;margin:12px 0 4px;font-size:15px}.cm-sec small{font-size:11px;font-weight:800;color:#3c5560;border:1.5px solid #3c5560;border-radius:5px;padding:0 5px}
+.cm-unit{background:#fff;border:2px solid var(--ink);border-radius:10px;padding:6px 10px;margin:4px 0}
+.cm-unit.full{background:#e8f6ee}
+.cm-h{display:flex;justify-content:space-between;gap:8px;font-size:14px}.cm-h span{font-size:12px;color:#3c5560;font-weight:700;white-space:nowrap}
+.cm-src{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cm-src button{font:inherit;font-weight:800;font-size:13px;color:var(--ink);background:var(--ticket);border:2px solid var(--ink);border-radius:8px;padding:4px 10px;box-shadow:0 2px 0 var(--ink)}
+.cm-src button small{font-weight:700;font-size:11px;color:#3c5560}

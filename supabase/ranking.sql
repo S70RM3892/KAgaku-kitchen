@@ -91,3 +91,7 @@ grant execute on function public.kk_submit(text,text,text,text,integer) to anon,
 -- 2026-11: 京大数学 早押し（kmath）を追加（作成済みの表は制約を付け直す）
 alter table kk.scores drop constraint if exists scores_g_check;
 alter table kk.scores add constraint scores_g_check check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath'));
+
+-- 2026-11: 理論化学 計算（kcalc）を追加
+alter table kk.scores drop constraint if exists scores_g_check;
+alter table kk.scores add constraint scores_g_check check (g in ('rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kmath','kcalc'));

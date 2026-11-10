@@ -8,6 +8,7 @@ import * as QZ from './quiz.js';
 import * as KK from './kakomon.js';
 import * as RK from './rank.js';
 import * as KSRC from './kakosrc.js';
+import {CHEMMAP,SRCN,pick as mapPick} from './chemmap.js';
 import * as E from './engine.js';
 import {HostNet,ClientNet,PROTO,normCode} from './net.js';
 const {COLORS,STAMPS}=E;
@@ -17,7 +18,7 @@ const {COLORS,STAMPS}=E;
 const SAVE_KEY='chem-kitchen-v2';
 const blankRec=()=>({mastery:{},best:{},coBest:{}});
 let KKSAVED=[];      // この端末に読み込んだ過去問（IndexedDB）
-let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec(),kako:blankRec(),kmath:blankRec()};
+let SAVE={name:'',mute:false,tut:false,tutA:false,tutO:false,tutI:false,coef:false,g:'rx',busy:2,ui:{},vs:{win:0,lose:0,draw:0},rx:blankRec(),atom:blankRec(),org:blankRec(),ion:blankRec(),eroot:blankRec(),esyn:blankRec(),eword:blankRec(),quiz:blankRec(),kphy:blankRec(),kchem:blankRec(),kako:blankRec(),kmath:blankRec(),kcalc:blankRec()};
 try{
   const s=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
   if(s&&(s.rx||s.atom))Object.assign(SAVE,s);
@@ -30,9 +31,9 @@ try{
     if(o.vs&&!(SAVE.vs.win+SAVE.vs.lose+SAVE.vs.draw))SAVE.vs=o.vs;
   }
 }catch(e){}
-const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kako','kmath'];
+const GS=['rx','atom','org','ion','quiz','eroot','esyn','eword','kphy','kchem','kako','kmath','kcalc'];
 // 科目：化学（4モード）と英語（3モード）
-const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz'],KYO=['kphy','kchem','kako'],MATHS=['kmath'];
+const ENG=['eroot','esyn','eword'],CHEM=['rx','atom','org','ion','quiz','kcalc'],KYO=['kphy','kchem','kako'],MATHS=['kmath'];
 const SUBJ={chem:CHEM,eng:ENG,kyo:KYO,math:MATHS};
 const subjOf=g=>ENG.includes(g)?'eng':KYO.includes(g)?'kyo':MATHS.includes(g)?'math':'chem';
 for(const g of GS){SAVE[g]=Object.assign(blankRec(),SAVE[g]||{});}
@@ -49,7 +50,7 @@ const GK=g=>GS.includes(g)?g:'rx';
 const SV=g=>SAVE[GK(g)];
 const knownKey=(g,k)=>E.isQuiz(g)?E.QBANK[g].known(k):g==='atom'?!!A.BYID[k]:isParts(g)?PM[g].M.known(k):!!MENU[k];
 // モードごとの呼び名
-const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題',kako:'問題',kmath:'問題'};
+const UNIT={rx:'反応',atom:'物質',org:'化合物',ion:'物質',eroot:'単語',esyn:'構文',eword:'語',quiz:'問題',kphy:'問題',kchem:'問題',kako:'問題',kmath:'問題',kcalc:'問題'};
 // 部品で組むモード（官能基・無機イオン）の画面まわり：棚の並び・伝票の種類・ヒント・表示
 const PM={
   org:{M:O,unit:'部品',cap:'骨格・官能基：タップで選んだ客の鍋へ',stackCols:6,
@@ -226,9 +227,10 @@ const HOWTO={
   org:`<b>官能基モード</b>：骨格（CH₃–・C₆H₅–・o-C₆H₄ など）と官能基（–OH・–CHO・–COOH など）の<b>部品を組んで有機化合物を作る</b>。「見分け」の注文では、2つの化合物を区別できる<b>検出試薬</b>（銀鏡・ヨードホルム・FeCl₃・NaHCO₃・さらし粉など）を1つ選ぶ。<br>
       <b>段階を選べる</b>：基礎（官能基入門）→基礎＋（検出反応）→標準（芳香族）→応用（異性体・ひっかけ）→京大（全範囲・性質のみ）。最初から全部選べる。<br>
       <b>覚え方の仕組み</b>：間違えると「何ができたか」「各試薬で何が起きるか」がその場で出て、次からよく注文される。教科書や文献で扱いが割れる反応（ギ酸とフェーリング液など）は正解に使わない。`,
+  kcalc:`<b>理論化学 計算</b>：物質量・気体・溶液・エンタルピー・酸塩基と pH・酸化還元滴定・電池と電気分解・反応速度・平衡・結晶格子・有機と高分子の<b>計算問題</b>（全117問・すべて自作）。ヒントは「分野 → 問題文 → 解き方 → 途中の結果」の順に出るので、<b>問題文だけで解ければ最高点</b>。最後のヒントのあと60秒考えられる。まちがいの選択肢は「係数の掛け忘れ」などの<b>よくある間違い</b>の値。<br>正解はすべて計算で確かめてある。原子量や定数は問題文に書いてある。`,
   kmath:`<b>京大数学 早押し</b>：極限・微分・定積分・面積体積・数列・確率・複素数平面・ベクトル・整数・三角指数対数の<b>計算問題</b>（全121問・すべて自作）。ヒントは「分野 → 問題文 → 解き方 → 途中の結果」の順に出るので、<b>問題文だけで解ければ最高点</b>。最後のヒントのあと40秒考えられる。<br>正解はすべて数式処理（sympy）と総当たりの計算で確かめてある。段階：極限と微分 → 積分・数列・関数 → 図形と複素数 → 確率と整数 → 京大ラッシュ。`,
   kphy:`<b>共テ物理 早押し</b>：力学・熱・波動・電磁気・原子の<b>法則・現象・力・物理量</b>を、少しずつ出るヒントから当てる早押し（全84問・すべて自作）。ヒントは分野 → 特徴 → 式・数値の順にはっきりしていく。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：力学→熱と波動→電磁気→原子→共テ総合。`,
-  kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（理論・高分子66問＋物質の早押し問題、すべて自作）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
+  kchem:`<b>共テ化学 早押し</b>：基本法則・気体と溶液の法則・コロイドや溶液の現象・濃度と定数・結晶・化学結合・高分子を当てる早押し（法則・用語・反応名など197問＋物質の早押し問題、すべて自作。分離・周期表・電池・無機工業・有機反応・糖やアミノ酸まで高校化学の全範囲）。<br>早いほど高得点、間違えると早いほど大きく減点。<b>段階を選べる</b>：基本法則と結合→気体・溶液・コロイド→量と定数→高分子→共テ総合（物質の問題も混ざる）。`,
   kako:`<b>過去問 早押し</b>：自分で用意した共テ・センターの物理・化学のPDF（問題と正解）を<b>この端末に読み込み</b>、1問ずつ切り取って早押しにする。問題は<b>上から少しずつ見えていく</b>ので、解けた瞬間に解答番号（①〜⑨・⓪）を押す。<br>
       <b>問題と正解はこの端末のブラウザの中だけに保存</b>され、サーバーやGitHubには送られない（過去問には著作権があるため）。友達と遊ぶときは、ホストだけが読み込んでいればいい（参加者には遊んでいる間だけ画像が届く）。PDFを選ぶだけで、切り取り・正解の割り当て・保存まで自動で行う。`,
   quiz:`<b>早押しクイズ</b>：条件（ヒント）が少しずつ出るので、<b>どの物質か分かった瞬間に選択肢をタップ</b>。早いほど高得点、ただし間違えると早いほど大きく減点され、その問題にはもう答えられない（当てずっぽうは損）。<br>
@@ -250,7 +252,7 @@ function renderTitle(){
     const best=R.best[busyKey(st.id,SAVE.busy)]||0,s=starsFor({stars:scaledStars(st,SAVE.busy)},best),lock=!unlocked(i,g);
     h+=`<button class="stage${lock?' locked':''}" data-stage="${i}">
       <div class="no">${lock?'🔒':i+1}</div>
-      <div><h3>${st.lvl?`<span class="lvl lv${i+1}">${esc(st.lvl)}</span>`:''}${esc(st.name)}</h3><p>${esc(st.desc)}${lock?'<br>前のステージで★1を取ると解放':''}</p></div>
+      <div><h3>${st.lvl?`<span class="lvl lv${i+1}${i===ST.length-1?' last':''}">${esc(st.lvl)}</span>`:''}${esc(st.name)}</h3><p>${esc(st.desc)}${lock?'<br>前のステージで★1を取ると解放':''}</p></div>
       <div class="best"><div class="stars">${'★'.repeat(s)}${'☆'.repeat(3-s)}</div>${best?best+'点':'—'}</div></button>`;
   });
   const weak=reviewPool(g).length,unit=UNIT[GK(g)];
@@ -697,8 +699,8 @@ $('kakoBox').addEventListener('click',e=>{const b=e.target.closest('[data-kk]');
   else if(b.dataset.kk==='import')kakoImportDialog();else kakoManage();});
 
 /* ================= 特訓（単元 × ルール）・今日の10問・今日の復習・誤答ノート ================= */
-const DRILL_BANKS=['kmath','kphy','kchem','quiz'];
-const BANKN={kmath:'京大数学',kphy:'共テ物理',kchem:'共テ化学',quiz:'物質クイズ'};
+const DRILL_BANKS=['kcalc','kchem','quiz','kmath','kphy'];
+const BANKN={kcalc:'化学計算',kchem:'化学知識',quiz:'物質当て',kmath:'京大数学',kphy:'共テ物理'};
 const DRULES=[
   {id:'std',name:'通常',d:'10問。ヒントが少しずつ出る'},
   {id:'ta',name:'タイムアタック',d:'90秒（数学は150秒）で何問正解できるか'},
@@ -707,7 +709,7 @@ const DRULES=[
 ];
 const QZMAJOR={org:'有機化合物',ion:'無機物質',atom:'組成（気体・無機・有機）'};
 const PMAJOR={mech:'力学',heat:'熱',wave:'波動',em:'電磁気',atom:'原子'};
-const CMAJOR={law:'法則（まとめ）',phen:'現象・性質（まとめ）',qty:'量・定数（まとめ）',poly:'高分子（まとめ）',cry:'結晶の構造',bond:'化学結合・分子間力'};
+const CMAJOR={law:'法則（まとめ）',phen:'現象・性質（まとめ）',qty:'量・定数（まとめ）',poly:'高分子（まとめ）',cry:'結晶の構造',bond:'化学結合・分子間力',orgr:'有機反応（まとめ）',bio:'糖・アミノ酸・油脂（まとめ）'};
 function catLabel(g,c){
   const B=E.QBANK[g];if(B.CATN&&B.CATN[c])return B.CATN[c];
   const [a,b]=c.split(':');if(a==='atom'&&A.CATNAME[b])return A.CATNAME[b];return b||a;
@@ -750,7 +752,7 @@ function drillStart(g,unit,rule){
   startSolo('s1',g,{rule,drill:`${g}|${unit.id}|${rule}`,pool:unit.ids,qn:rule==='std'||rule==='open'?Math.min(10,unit.ids.length):undefined,label:`${BANKN[g]}・${unit.name}・${R.name}`});
 }
 function drillHub(){
-  const H=UI.dh||(UI.dh={g:'kmath',rule:'std'});const day=dayKey(new Date());
+  const H=UI.dh||(UI.dh={g:'kcalc',rule:'std'});const day=dayKey(new Date());
   const units=drillUnits(H.g),D=SAVE.drill||{},R=DRULES.find(x=>x.id===H.rule);
   const best=u=>{const b=D[`${H.g}|${u.id}|${H.rule}`];return b?(H.rule==='ta'?`${b.best}問`:H.rule==='surv'?`${b.best}連続`:`${b.best}点`):'—';};
   overlay(`<h2>🎯 特訓</h2>
@@ -786,12 +788,12 @@ function drillResults(r){
     <div class="row-btns"><button class="btn go" data-ov="retry">もう一回</button><button class="btn" data-ov="drill">特訓メニュー</button><button class="btn sub" data-ov="menu">メニュー</button></div>`,'result');
 }
 function noteOverlay(){
-  const H=UI.nb||(UI.nb={g:DRILL_BANKS.find(g=>noteIds(g).length)||'kmath'});
+  const H=UI.nb||(UI.nb={g:DRILL_BANKS.find(g=>noteIds(g).length)||'kcalc'});
   const ids=noteIds(H.g),B=E.QBANK[H.g],M=SV(H.g).mastery;
   overlay(`<h2>📒 誤答ノート</h2><p class="note">まちがえた・答えられなかった問題（ヒントは全部見られる）。まちがいが多い順。</p>
     <div class="seg dh-banks">${DRILL_BANKS.map(g=>`<button data-nb="${g}" class="${g===H.g?'on':''}">${BANKN[g]} ${noteIds(g).length}</button>`).join('')}</div>
     ${ids.length?`<div class="row-btns"><button class="btn go" data-nplay="${H.g}">ここから ${Math.min(10,ids.length)}問 出題</button></div>`:''}
-    <div class="nb-list">${ids.length?ids.slice(0,80).map(k=>{const q=B.Q[k],m=M[k];return `<details class="nb-it"><summary><b>${esc(q.n)}</b><small>正解 ${m.ok}・まちがい ${m.ng}</small></summary><ol>${q.clues.map(c=>`<li>${esc(c)}</li>`).join('')}</ol></details>`;}).join(''):'<p class="note">この科目で、まちがえた問題はまだない</p>'}</div>
+    <div class="nb-list">${ids.length?ids.slice(0,80).map(k=>{const q=B.Q[k],m=M[k];return `<details class="nb-it"><summary><b>${esc(B.label?B.label(k):q.n)}</b><small>正解 ${m.ok}・まちがい ${m.ng}</small></summary><ol>${q.clues.map(c=>`<li>${esc(c)}</li>`).join('')}</ol>${B.label?`<p class="nb-ans">答え：<b>${esc(q.n)}</b></p>`:''}</details>`;}).join(''):'<p class="note">この科目で、まちがえた問題はまだない</p>'}</div>
     <div class="row-btns"><button class="btn sub" data-ov="drillback">特訓へ</button><button class="btn go" data-ov="close">閉じる</button></div>`,'note');
 }
 $('ov').addEventListener('click',e=>{
@@ -846,10 +848,57 @@ document.addEventListener('change',async e=>{
     <div class="row-btns"><button class="btn go" data-ov="impok">読み込む</button><button class="btn sub" data-ov="close">やめる</button></div>`,'imp');
 });
 
+/* ================= 化学マップ（高校化学の全単元と習得状況） ================= */
+// 単元の「学びどころ」1つぶんの項目（そのモードの学習記録のキー）を集める
+function mapItems(g,sel){
+  if(E.isQuiz(g)){const B=E.QBANK[g];return B.ALL.filter(k=>!k.startsWith('x')&&mapPick(sel,B.Q[k].cat,B.Q[k].n));}
+  if(g==='rx')return Object.keys(MENU).filter(k=>mapPick(sel,MENU[k].c,''));
+  if(g==='atom')return A.DB.filter(d=>mapPick(sel,d.c,d.n)).map(d=>d.id);
+  const M=isParts(g)?PM[g].M:null;return M?M.DB.filter(d=>mapPick(sel,d.k,d.n)).map(d=>d.id):[];
+}
+const MAPC={};
+function mapUnits(){
+  if(MAPC.u)return MAPC.u;
+  // 共テ化学に混ぜてある物質の問題（キーが x で始まる）は、名前で指定されたときだけ拾う
+  const xByName={};const KB=E.QBANK.kchem;KB.ALL.forEach(k=>{if(k.startsWith('x'))xByName[KB.Q[k].n]=k;});
+  return MAPC.u=CHEMMAP.map(S=>({sec:S.sec,sub:S.sub,units:S.units.map(u=>({n:u.n,src:u.src.map(([g,sel])=>{
+    const ids=mapItems(g,sel);if(g==='kchem'&&sel&&sel.n)sel.n.forEach(nm=>{if(xByName[nm]&&!ids.includes(xByName[nm]))ids.push(xByName[nm]);});
+    return {g,ids};}).filter(x=>x.ids.length)}))}));
+}
+const mapDone=(g,ids)=>{const M=SV(g).mastery;return ids.filter(k=>M[k]&&M[k].box>=4).length;};
+const mapSeen=(g,ids)=>{const M=SV(g).mastery;return ids.filter(k=>M[k]&&M[k].seen).length;};
+function mapOverlay(){
+  const U=mapUnits();let tot=0,done=0,seen=0;
+  U.forEach(S=>S.units.forEach(u=>u.src.forEach(x=>{tot+=x.ids.length;done+=mapDone(x.g,x.ids);seen+=mapSeen(x.g,x.ids);})));
+  let ui=0;
+  const body=U.map(S=>`<div class="cm-sec"><b>${esc(S.sec)}</b><small>${esc(S.sub)}</small></div>`+S.units.map(u=>{
+    const t=u.src.reduce((a,x)=>a+x.ids.length,0),d=u.src.reduce((a,x)=>a+mapDone(x.g,x.ids),0),sn=u.src.reduce((a,x)=>a+mapSeen(x.g,x.ids),0),id=ui++;
+    return `<div class="cm-unit ${d===t?'full':sn?'':'new'}"><div class="cm-h"><b>${esc(u.n)}</b><span>${sn?`覚えた ${d} / ${t}`:'まだ'}</span></div>
+      <div class="sm-bar" role="img" aria-label="覚えた割合 ${pct(d,t)}%"><i style="width:${pct(d,t)}%"></i></div>
+      <div class="cm-src">${u.src.map((x,j)=>`<button data-cm="${id}:${j}">${SRCN[x.g]} <small>${mapDone(x.g,x.ids)}/${x.ids.length}</small></button>`).join('')}</div></div>`;}).join('')).join('');
+  overlay(`<h2>🧭 化学マップ</h2>
+    <p class="note cm-lead">高校化学（化学基礎＋化学）の全単元。<b>知識</b>（用語・法則）、<b>計算</b>、<b>つくる</b>（反応式・組成・官能基・無機イオン）のどれで学べるかと、覚えた数。押すとその単元だけを出題する。</p>
+    <div class="cm-total"><span>化学全体</span><b>${pct(done,tot)}%</b><small>覚えた ${done} / ${tot} 項目（手をつけた ${seen}）</small><div class="sm-bar"><i style="width:${pct(done,tot)}%"></i></div></div>
+    ${body}
+    <div class="row-btns"><button class="btn go" data-ov="close">閉じる</button></div>`,'cmap');
+}
+$('ov').addEventListener('click',e=>{
+  if(OVK!=='cmap')return;const b=e.target.closest('[data-cm]');if(!b)return;
+  const [ui,j]=b.dataset.cm.split(':').map(Number);let n=0,hit=null;mapUnits().forEach(S=>S.units.forEach(u=>{if(n++===ui)hit=u;}));
+  const x=hit&&hit.src[j];if(!x)return;
+  closeOverlay();
+  if(E.isQuiz(x.g)){
+    // まだ覚えていない項目を優先（全部覚えていたら全部から）
+    const M=SV(x.g).mastery,todo=x.ids.filter(k=>!(M[k]&&M[k].box>=4)),pool=todo.length>=3?todo:x.ids;
+    startSolo('s1',x.g,{rule:'std',drill:`${x.g}|map:${ui}|std`,pool,qn:Math.min(10,pool.length),label:`${hit.n}（${SRCN[x.g]}）`});
+  }else{SAVE.g=x.g;persist();renderTitle();show('title');window.scrollTo(0,0);}   // つくるモードは、そのモードの画面へ
+});
+$('btnMap').addEventListener('click',()=>{audio();mapOverlay();});
+
 /* ================= 学習記録ダッシュボード ================= */
 // 項目の名前と分類（苦手の一覧・分類ごとの正答率に使う）
 function itemInfo(g,k){
-  if(E.isQuiz(g)){const q=E.QBANK[g].Q[k];return q?{n:q.n,c:String(q.cat||'').replace(/^\w+:/,'')}:null;}
+  if(E.isQuiz(g)){const B=E.QBANK[g],q=B.Q[k];return q?{n:B.label?B.label(k):q.n,c:catLabel(g,q.cat)}:null;}
   if(g==='rx'){const it=MENU[k];return it?{n:nameOf(it.t),c:CATNAME[it.c]||''}:null;}
   if(g==='atom'){const d=A.BYID[k];return d?{n:d.n,c:A.CATNAME[d.c]||''}:null;}
   const M=isParts(g)?PM[g].M:null,d=M&&M.BYID&&M.BYID[k];if(!d)return null;
@@ -1540,7 +1589,7 @@ function renderLobby(){
   $('lobGame').dataset.subj=subjOf(g);showModes($('lobGame'),g);$('lobSubj').querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset.subj===subjOf(g));b.disabled=!host;});
   let sh='';
   [...stagesOf(g),{id:'rv',name:'苦手ミックス',desc:`全員の苦手な${UNIT[g]}（★2以下）を集中注文`}].forEach((st,i)=>{
-    sh+=`<button class="lst${st.id===cfg.stageId?' on':''}" data-st="${st.id}" ${host?'':'disabled'}><b>${st.lvl?`<span class="lvl lv${i+1}">${esc(st.lvl)}</span>`:''}${esc(st.name)}</b><span>${esc(st.desc)}</span></button>`;
+    sh+=`<button class="lst${st.id===cfg.stageId?' on':''}" data-st="${st.id}" ${host?'':'disabled'}><b>${st.lvl?`<span class="lvl lv${i+1}${i===stagesOf(g).length-1?' last':''}">${esc(st.lvl)}</span>`:''}${esc(st.name)}</b><span>${esc(st.desc)}</span></button>`;
   });
   $('lobStages').innerHTML=sh;
   $('lobSplitRow').style.display=cfg.mode==='coop'&&g!=='quiz'?'':'none';

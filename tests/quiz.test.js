@@ -37,7 +37,22 @@ const P2=[{id:'p0',name:'A',slot:0},{id:'p1',name:'B',slot:1}];
   for(let i=0;i<50;i++)tick(S,0.1);const q2=S.qz.q;apply(S,'p1',{t:'ans',c:q2.k});assert.ok(S.team.score>0);
 }
 // 共テ物理・化学の早押し：同じ仕組みで動く。名前の重複なし・ヒント3つ以上・選択肢は正解を含む
-Promise.all([import('../js/kyote.js'),import('../js/kmath.js')]).then(([{KPHY,KCHEM},{KMATH}])=>{
+Promise.all([import('../js/kyote.js'),import('../js/kmath.js'),import('../js/kcalc.js'),import('../js/chemmap.js')]).then(([{KPHY,KCHEM},{KMATH},{KCALC},{CHEMMAP,pick}])=>{
+  // 理論化学 計算：問題ごとに「よくある間違い」の選択肢をもつ。正解は必ず選択肢に入り、同じ表示が2つ並ばない
+  assert.ok(KCALC.ALL.length>=110,'kcalc has 110+ questions');
+  for(const k of KCALC.ALL){const q=KCALC.Q[k];assert.ok(KCALC.known(k)&&q.clues.length>=4&&q.wrong.length>=3,k);assert.ok(q.wrong.every(w=>!KCALC.known(w)&&KCALC.Q[w].n!==q.n),k+' distractor');
+    for(const n of [4,6]){const c=KCALC.choices(k,n);assert.ok(c.includes(k)&&c.length===Math.min(n,q.wrong.length+1));assert.equal(new Set(c.map(x=>KCALC.Q[x].n)).size,c.length,k);}}
+  for(const st of KCALC.STAGES){assert.ok(st.pool.length>=8,st.id);const S=createGame({g:'kcalc',mode:'solo',stageId:st.id,players:[{id:'p0',name:'me'}]});begin(S);
+    let guard=0;while(!S.over&&guard++<300000){const q=S.qz.q;if(q&&q.state==='open'&&q.t>2&&guard%7===0)apply(S,'p0',{t:'ans',c:guard%3?q.k:q.choices.find(c=>c!==q.k)});tick(S,0.1);}
+    assert.equal(results(S).log.length,S.qz.total,'kcalc '+st.id);}
+  console.log('kcalc ok',KCALC.ALL.length,'questions');
+  // 化学マップ：共テ化学の知識問題と計算問題のすべてが、どれかの単元に入っている（抜けが無い）
+  {const inMap=(g,B)=>B.ALL.filter(k=>!k.startsWith('x')).filter(k=>!CHEMMAP.some(S=>S.units.some(u=>u.src.some(([gg,sel])=>gg===g&&pick(sel,B.Q[k].cat,B.Q[k].n))))).map(k=>B.Q[k].n);
+   assert.deepEqual(inMap('kchem',KCHEM),[],'every kchem item is on the map');assert.deepEqual(inMap('kcalc',KCALC),[],'every kcalc item is on the map');
+   // 名前で指定した項目は実在する（書き間違いが無い）
+   const names=new Set(KCHEM.ALL.map(k=>KCHEM.Q[k].n));
+   for(const S of CHEMMAP)for(const u of S.units)for(const [g,sel] of u.src)if(g==='kchem'&&sel&&sel.n)for(const n of sel.n)assert.ok(names.has(n),'map names an unknown item: '+n);
+   console.log('chem map ok',CHEMMAP.reduce((a,S)=>a+S.units.length,0),'units');}
   // 京大数学：問題文＋ヒント2つ以上・選択肢に同じ値が2つ並ばない・だれも答えなくても制限時間内に全問出る
   assert.ok(KMATH.ALL.length>=120,'kmath has 120+ questions');
   for(const k of KMATH.ALL){const q=KMATH.Q[k];assert.ok(q.clues.length>=4&&/求めよ|何通りか|いくつあるか|何桁|を解け|で表せ/.test(q.clues[1]),k);
@@ -55,6 +70,7 @@ Promise.all([import('../js/kyote.js'),import('../js/kmath.js')]).then(([{KPHY,KC
    const ord=KMATH.ALL.slice(5,15),dl=play({rule:'daily',order:ord},S=>{});assert.deepEqual(results(dl).log.map(l=>l.k),ord,'daily asks the fixed 10 in order');
    const nr=play({},S=>{});assert.ok(!results(nr).drill&&results(nr).rule==='std','normal play unchanged');
    console.log('drill rules ok');}
+  assert.ok(KCHEM.ALL.filter(k=>!k.startsWith('x')).length>=190,'kchem covers 190+ terms');
   for(const [g,B] of [['kphy',KPHY],['kchem',KCHEM],['kmath',KMATH]]){
     if(g!=='kmath')assert.equal(new Set(B.ALL.map(k=>B.Q[k].n)).size,B.ALL.length,g+' unique names');   // 数学は答えの値が重なってよい
     for(const k of B.ALL){assert.ok(B.Q[k].clues.length>=3,k);const c=B.choices(k,6);assert.ok(c.includes(k)&&c.length===6);}

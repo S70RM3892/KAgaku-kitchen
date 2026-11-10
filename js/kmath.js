@@ -14,4 +14,5 @@ export const KMATH=makeBank(MATH,MCAT,ids=>[
   ST('s4','応用','確率と整数','確率・場合の数・整数の性質',ids(has('prob','num'))),
   ST('s5','京大','京大ラッシュ（早押し）','全範囲・ヒントが速い・選択肢6つ・12問',ids(()=>true),{reveal:4,nch:6,qn:12,stars:[140,280,420]}),
 ],RV);
-KMATH.tail=40;   // 最後のヒントが出てから計算して答えられる秒数
+KMATH.tail=40;
+KMATH.label=k=>KMATH.Q[k]?KMATH.Q[k].clues[1]:'';   // 一覧（誤答ノートなど）には、答えではなく問題文を出す   // 最後のヒントが出てから計算して答えられる秒数
