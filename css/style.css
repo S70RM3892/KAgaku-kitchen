@@ -989,3 +989,25 @@ body.ui-land.quiz-on #game #quizbox.kk{display:grid;grid-template-columns:minmax
 .cm-src{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .cm-src button{font:inherit;font-weight:800;font-size:13px;color:var(--ink);background:var(--ticket);border:2px solid var(--ink);border-radius:8px;padding:4px 10px;box-shadow:0 2px 0 var(--ink)}
 .cm-src button small{font-weight:700;font-size:11px;color:#3c5560}
+/* =================== 仕上げ：今日のメニュー・読みやすさ =================== */
+.today{background:#0e1c22;border:3px solid var(--ticket);border-radius:16px;padding:10px 12px;margin:8px 0 10px;box-shadow:0 4px 0 var(--ink)}
+.today-h{font-family:var(--font-display);color:var(--ticket);font-size:17px;display:flex;justify-content:space-between;align-items:baseline}
+.today-h span{font-family:var(--font-body);font-weight:800;font-size:12px;color:#cfe3e8}
+.today .goal-line{margin:6px 0}
+.today-main{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.tm{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--steel);color:var(--ink);border:3px solid var(--ink);border-radius:12px;padding:8px 2px;font:inherit;font-weight:800;font-size:12px;box-shadow:0 3px 0 var(--ink);touch-action:manipulation}
+.tm b{font-size:17px;line-height:1.1}
+.tm:disabled{opacity:.55;box-shadow:none}
+.tm.done{background:#bfe8cf}
+.tm:not(:disabled):active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.today-sub{display:flex;gap:6px;margin-top:8px}.today-sub .btn{flex:1 1 0;min-width:0;padding:6px 2px;font-size:12px}
+.today .note{margin-top:6px;color:#cfe3e8}
+/* モード・科目のボタン：小さい字では太い飾り文字が読みにくいので、ふつうの太字にする */
+.gsel button,.seg.subj button{font-family:var(--font-body);font-weight:800;letter-spacing:0}
+/* 明るいパネルの上の注釈は、濃い色で読みやすく */
+.panel .note{color:#3c5560;font-weight:700}
+.panel .today .note{color:#cfe3e8}
+:where(body.ui-land) .today{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center}
+:where(body.ui-land) .today-h,:where(body.ui-land) .today .note,:where(body.ui-land) #todayGoal{grid-column:1/-1}
+.goal-line{color:var(--ink)}
+.nb-it summary{flex-direction:column;gap:2px}.nb-it summary small{white-space:nowrap}

@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;800&display=swap" rel="stylesheet">
@@ -22,6 +23,21 @@
   <!-- タイトル -->
   <section id="title" class="screen on" aria-label="タイトル">
     <h1 class="logo">ケミカル・キッチン<small>注文の物質を作って届けろ。化学・英語・共テ（物理・化学）・数学から選べる。<span class="land">📱 <b>横持ち・縦持ち</b>どちらでも遊べる（⚙設定で固定もできる）</span></small></h1>
+    <div class="today" id="todayBox" aria-label="今日のメニュー">
+      <div class="today-h">今日のメニュー<span id="todayStreak"></span></div>
+      <div id="todayGoal"></div>
+      <div class="today-main">
+        <button class="tm" id="btnReview"><span>🔁 復習</span><b id="tmReview">—</b></button>
+        <button class="tm" id="btnDaily"><span>📅 今日の10問</span><b id="tmDaily">—</b></button>
+        <button class="tm" id="btnMap"><span>🧭 化学マップ</span><b id="tmMap">—</b></button>
+      </div>
+      <div class="today-sub">
+        <button class="btn sub mini" id="btnDrill">🎯 特訓</button>
+        <button class="btn sub mini" id="btnNote">📒 誤答ノート</button>
+        <button class="btn sub mini" id="btnStats">📊 学習記録</button>
+      </div>
+      <p class="note" id="todayHint"></p>
+    </div>
     <div class="seg subj" id="titleSubj" role="group" aria-label="科目"><button data-subj="chem">🧪 化学</button><button data-subj="eng">🔤 英語</button><button data-subj="kyo">📝 共テ</button><button data-subj="math">📐 数学</button></div>
     <div class="seg gsel" id="titleGame" role="group" aria-label="ゲームモード">
       <button data-g="rx">反応式モード<small>試薬・触媒・加熱で反応を組む</small></button>
@@ -57,10 +73,6 @@
     <div class="kakobox" id="kakoBox" style="display:none"></div>
     <div class="stages" id="stageList"></div>
     <div class="row-btns">
-      <button class="btn go" id="btnMap">🧭 化学マップ</button>
-      <button class="btn go" id="btnDrill">🎯 特訓</button>
-      <button class="btn sub" id="btnNote">📒 誤答ノート</button>
-      <button class="btn sub" id="btnStats">📊 学習記録</button>
       <button class="btn sub" id="btnRank">🏆 ランキング</button>
       <button class="btn sub" id="btnDex">反応図鑑</button>
       <button class="btn sub" id="btnHow">遊び方</button>

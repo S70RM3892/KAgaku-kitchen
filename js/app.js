@@ -243,7 +243,28 @@ const HOWTO={
       <b>半反応式の注文</b>：MnO₄⁻ → Mn²⁺（硫酸酸性）のように変化が示されるので、<b>e⁻・H⁺・H₂O（・OH⁻）の数</b>を合わせる。酸化還元滴定の計算の土台。<br>
       <b>段階を選べる</b>：基礎（イオンの組み立て）→基礎＋（酸・塩基・塩）→標準（酸化還元）→応用（沈殿と錯イオン）→京大（全範囲）。最初から全部選べる。`
 };
+// 今日のメニュー：今日やることを一番上に（復習 → 今日の10問 → 化学マップ）
+function todayState(){
+  const due=DRILL_BANKS.map(g=>({g,ids:dueIds(g)})).filter(x=>x.ids.length).sort((a,b)=>b.ids.length-a.ids.length);
+  const day=dayKey(new Date()),left=DRILL_BANKS.filter(g=>!dailyDone(g,day));
+  let tot=0,done=0;mapUnits().forEach(S=>S.units.forEach(u=>u.src.forEach(x=>{tot+=x.ids.length;done+=mapDone(x.g,x.ids);})));
+  return {due,left,mapPct:pct(done,tot),dueN:due.reduce((a,x)=>a+x.ids.length,0)};
+}
+function renderToday(){
+  if(!$('todayBox'))return;
+  const T=todayState(),st=streakDays(),D=statDay();
+  $('todayGoal').innerHTML=goalLine();
+  $('todayStreak').textContent=st?`連続 ${st}日`:'';
+  $('tmReview').textContent=T.dueN?`${T.dueN}問`:'なし';$('btnReview').disabled=!T.dueN;
+  $('tmDaily').textContent=T.left.length?`あと${T.left.length}科目`:'✓ 全部済み';$('btnDaily').classList.toggle('done',!T.left.length);
+  $('tmMap').textContent=`${T.mapPct}%`;
+  const fresh=!T.dueN&&!Object.values(statsOf().days).some(x=>x.ok+x.ng+x.games>0)&&!GS.some(g=>Object.keys(SV(g).mastery).length);
+  $('todayHint').textContent=fresh?'はじめてなら、下のステージ1から。慣れたら「化学マップ」で全単元をひととおり回す。'
+    :T.dueN?'まず「復習」を空にする。忘れかける頃に出し直すのが一番定着する。'
+    :T.left.length?'復習は済み。「今日の10問」を1回やっておく。':(D.ok+D.ng)>=+(SAVE.ui.goal||30)?'今日のぶんは完了。あとは寝ろ。':'復習と今日の10問は済み。化学マップの「まだ」の単元を進める。';
+}
 function renderTitle(){
+  renderToday();
   const g=SAVE.g,R=SV(g),ST=stagesOf(g),RV=reviewOf(g);
   $('titleGame').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
   $('titleGame').dataset.subj=subjOf(g);showModes($('titleGame'),g);$('titleSubj').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.subj===subjOf(g)));
@@ -812,6 +833,12 @@ $('ov').addEventListener('click',e=>{
   }
 });
 $('btnDrill').addEventListener('click',()=>{audio();drillHub();});
+// 復習：出し直す時期が来た問題がいちばん多い科目から始める
+$('btnReview').addEventListener('click',()=>{audio();const x=todayState().due[0];if(!x)return;
+  startSolo('s1',x.g,{rule:'std',drill:`${x.g}|review|std`,pool:x.ids,qn:Math.min(10,x.ids.length),label:`${BANKN[x.g]}・今日の復習`});});
+// 今日の10問：まだやっていない科目を順に（全部済みなら特訓の画面へ）
+$('btnDaily').addEventListener('click',()=>{audio();const g=todayState().left[0];if(!g){drillHub();return;}
+  startSolo('s1',g,{rule:'daily',drill:`${g}|daily|${dayKey(new Date())}`,order:dailyOrder(g),pool:E.QBANK[g].ALL.slice(),label:`${BANKN[g]}・今日の10問`});});
 $('btnNote').addEventListener('click',()=>{audio();noteOverlay();});
 
 // 就寝前ガード：就寝時刻の1時間前〜5時は、ゲームを始める前に止める（「5分だけ」で一時的に解除）
@@ -2628,8 +2655,8 @@ function reviewHTMLQ(r,mode){
   const QB=E.QBANK[r.g];
   (r.log||[]).forEach(l=>{if(!QB.known(l.k))return;(l.ok&&(mode!=='versus'||l.by===M)?ok:ng).push(l);});
   let h='';
-  if(ng.length)h+=`<div class="sec-h">要復習（次回よく出る）</div><div class="rev">`+ng.map(l=>`<div class="it"><b>${esc(QB.Q[l.k].n)}</b>　<span class="why">${l.ok?`${esc(nm(l.by))} が正解`:'正解者なし'}</span><div class="note2">${QB.Q[l.k].clues.map(clueHTML).join('／')}</div></div>`).join('')+'</div>';
-  if(ok.length)h+=`<div class="sec-h">正解した問題</div><div class="rev">`+ok.map(l=>`<div class="it ok"><b>${esc(QB.Q[l.k].n)}</b>　ヒント${l.ci}つ目で${mode!=='solo'?`（${esc(nm(l.by))}）`:''}　<span style="color:#e0a100">${stars3(mst(l.k,r.g).box)}</span></div>`).join('')+'</div>';
+  if(ng.length)h+=`<div class="sec-h">要復習（次回よく出る）</div><div class="rev">`+ng.map(l=>`<div class="it"><b>${esc(QB.label?QB.label(l.k)+' → '+QB.Q[l.k].n:QB.Q[l.k].n)}</b>　<span class="why">${l.ok?`${esc(nm(l.by))} が正解`:'正解者なし'}</span><div class="note2">${QB.Q[l.k].clues.map(clueHTML).join('／')}</div></div>`).join('')+'</div>';
+  if(ok.length)h+=`<div class="sec-h">正解した問題</div><div class="rev">`+ok.map(l=>`<div class="it ok"><b>${esc(QB.label?QB.label(l.k)+' → '+QB.Q[l.k].n:QB.Q[l.k].n)}</b>　ヒント${l.ci}つ目で${mode!=='solo'?`（${esc(nm(l.by))}）`:''}　<span style="color:#e0a100">${stars3(mst(l.k,r.g).box)}</span></div>`).join('')+'</div>';
   return h;
 }
 function reviewHTML(r,mode){
@@ -2741,3 +2768,5 @@ renderTitle();
 })();
 // テスト用フック
 window.__kk={get SES(){return SES;},view,me,UI};
+// オフラインでも開けるように、読み込んだファイルを端末に控える（つながるときは常に新しいものを取りに行く）
+if('serviceWorker' in navigator&&location.protocol==='https:')window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});
