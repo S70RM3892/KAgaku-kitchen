@@ -10,6 +10,7 @@ const ORIGINS = ['https://s70rm3892.github.io', 'http://127.0.0.1:8765', 'http:/
 const HEALTH_URL = 'https://img.cf.47news.jp/static/kyotsu-exam/2025/files/3hp3a3ybgi-answer.pdf';
 const UA = 'Mozilla/5.0 (compatible; kk-relay/1; personal use)';
 let lastHealth = 0;
+let envNames = null;   // 環境変数の名前の一覧（値ではない）。Supabase で動くときだけ入る
 
 function cors(req) {
   const o = req.headers.get('origin') || '';
@@ -53,8 +54,13 @@ export async function handle(req, env, fetchImpl = fetch) {
     }
   }
 
-  const pass = env('KK_RELAY_PASS') || '';
-  if (pass.length < 8) return json(503, { ok: false, error: '合言葉がまだ設定されていない' }, h);
+  const pass = (env('KK_RELAY_PASS') || '').trim();
+  if (pass.length < 8) {
+    // どこがおかしいかだけを返す（値は返さない）：未設定・短すぎ・名前ちがい（大文字小文字や空白）
+    const similar = (typeof envNames === 'function' ? envNames() : []).filter((k) => k !== 'KK_RELAY_PASS' && /kk.?relay|relay.?pass/i.test(k));
+    const why = pass.length ? '合言葉が短すぎる（8文字以上にする）' : similar.length ? `名前がちがう（「${similar.join('」「')}」になっている。KK_RELAY_PASS にする）` : '合言葉がまだ設定されていない（名前 KK_RELAY_PASS）';
+    return json(503, { ok: false, error: why }, h);
+  }
   if (!(await samePass(req.headers.get('x-kk-pass') || '', pass))) {
     await new Promise((r) => setTimeout(r, 700)); // 総当たりを遅くする
     return json(401, { ok: false, error: '合言葉がちがう' }, h);
@@ -77,4 +83,7 @@ export async function handle(req, env, fetchImpl = fetch) {
 }
 
 // Supabase（Deno）で動くときだけ起動する（テストでは handle を直接呼ぶ）
-if (typeof Deno !== 'undefined') Deno.serve((req) => handle(req, (k) => Deno.env.get(k)));
+if (typeof Deno !== 'undefined') {
+  envNames = () => { try { return Object.keys(Deno.env.toObject()); } catch (_) { return []; } };
+  Deno.serve((req) => handle(req, (k) => Deno.env.get(k)));
+}

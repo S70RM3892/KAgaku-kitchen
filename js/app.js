@@ -552,14 +552,15 @@ const relayCmd={
 };
 // 自分専用の中継（クラウド：あなたの Supabase の Edge Function「kk-relay」）。合言葉はこの端末にだけ保存（書き出しファイルにも入れない）
 const CLOUD='https://zcwqgnlcigkieymhbnvh.supabase.co/functions/v1/kk-relay';
-const cloudPass=()=>{try{return localStorage.getItem('kk-relay-pass')||'';}catch(e){return '';}};
+const cloudPass=()=>{try{return (localStorage.getItem('kk-relay-pass')||'').trim();}catch(e){return '';}};
 let RELAY_MODE=null;   // 'cloud'（自分専用のクラウド中継）・'local'（この端末の中継）・null
 async function cloudPing(force){
   const p=cloudPass();if(!p)return false;
   if(!force&&Date.now()-(UI.cloudOkAt||0)<60000)return true;   // 1分以内につながっていれば聞き直さない
   try{const ac=new AbortController();setTimeout(()=>ac.abort(),12000);   // 止まっていたサーバーが起きるのを待つ
     const r=await fetch(CLOUD+'?ping=1',{cache:'no-store',headers:{'x-kk-pass':p},signal:ac.signal});
-    UI.cloudErr=r.ok?'':r.status===401?'合言葉がちがう':r.status===503?'サーバーに合言葉がまだ設定されていない':'中継の応答 '+r.status;
+    let why='';if(!r.ok){try{why=(await r.clone().json()).error||'';}catch(e){}}
+    UI.cloudErr=r.ok?'':r.status===401?'合言葉がちがう':r.status===503?(why||'サーバーに合言葉がまだ設定されていない'):'中継の応答 '+r.status;
     if(r.ok)UI.cloudOkAt=Date.now();return r.ok;}catch(e){UI.cloudErr='中継につながらない';return false;}
 }
 async function localPing(){
@@ -2473,7 +2474,7 @@ $('ov').addEventListener('click',e=>{
     case 'drillback':drillHub();break;
     case 'bed5':{UI.bedOk=Date.now()+5*60e3;closeOverlay();const go=UI.bedGo;UI.bedGo=null;if(go)go();break;}
     case 'export':exportSave();break;
-    case 'rpsave':{const v=($('relayPass')||{}).value||'';if(v)try{localStorage.setItem('kk-relay-pass',v);}catch(e){}
+    case 'rpsave':{const v=(($('relayPass')||{}).value||'').trim();if(v)try{localStorage.setItem('kk-relay-pass',v);}catch(e){}
       const st=$('relayPassSt');if(st)st.textContent='確認中…';cloudPing(true).then(ok=>{const s2=$('relayPassSt');if(s2)s2.textContent=ok?'✓ 自分専用の中継につながった':'× '+(UI.cloudErr||'つながらない');});break;}
     case 'rpclear':{try{localStorage.removeItem('kk-relay-pass');}catch(e){}UI.cloudOkAt=0;openSettings(UI.setBack);break;}
     case 'impok':{try{localStorage.setItem(SAVE_KEY,JSON.stringify(UI.impSave));}catch(e){}location.reload();break;}
